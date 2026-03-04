@@ -1,0 +1,417 @@
+// prisma/schema.prisma
+// CC KPI Tracker — Full schema from CLAUDE.md Section 4.2
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+// ─────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum Tier {
+  JUNIOR
+  ENGINEER
+  SENIOR
+  TEAM_LEAD
+  SECTION_HEAD
+}
+
+enum KpiDirection {
+  HIGHER
+  LOWER
+  BINARY
+}
+
+enum KpiUnit {
+  PERCENTAGE
+  COUNT
+  SCORE
+  BINARY
+  DAYS
+}
+
+enum KpiFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+enum ActualStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum AppraisalBand {
+  EXCEEDS
+  STRONG
+  MEETS
+  NEEDS_IMPROVEMENT
+  UNSATISFACTORY
+}
+
+// ─────────────────────────────────────
+// COMPANY & ORGANIZATION
+// ─────────────────────────────────────
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  sector      String?
+  logo        String?  // URL to company logo
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  departments Department[]
+  users       User[]
+
+  @@map("companies")
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime @default(now())
+
+  users       User[]
+
+  @@map("departments")
+}
+
+// ─────────────────────────────────────
+// USERS & TEAMS
+// ─────────────────────────────────────
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  employeeId      String?    @unique  // e.g., "#905-27875"
+  avatarUrl       String?
+  role            Role       @default(USER)
+  tier            Tier       @default(ENGINEER)
+  jobTitle        String?
+  companyId       String
+  company         Company    @relation(fields: [companyId], references: [id])
+  departmentId    String?
+  department      Department? @relation(fields: [departmentId], references: [id])
+  managerId       String?    // direct manager
+  manager         User?      @relation("ManagerReports", fields: [managerId], references: [id])
+  reports         User[]     @relation("ManagerReports")
+  nationality     String?
+  preferredLocale String     @default("en")  // "en", "ar" (future)
+  isActive        Boolean    @default(true)
+  failedLoginAttempts Int     @default(0)
+  lockedUntil     DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  kpiAssignments  KpiAssignment[]
+  kpiActuals      KpiActual[]
+  teamMemberships TeamMember[]    @relation("MemberTeams")
+  teamLeadOf      TeamMember[]    @relation("LeaderTeams")
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  passwordHistory PasswordHistory[]
+  resetTokens     PasswordResetToken[]
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  tokenHash   String   @unique  // SHA-256 hash of the plain token
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  passwordHash String   // bcrypt hash of previous password
+  createdAt    DateTime @default(now())
+
+  @@map("password_history")
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("MemberTeams", fields: [userId], references: [id])
+  leaderId  String
+  leader    User     @relation("LeaderTeams", fields: [leaderId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, leaderId])
+  @@map("team_members")
+}
+
+// ─────────────────────────────────────
+// EVALUATION PERIODS
+// ─────────────────────────────────────
+
+model EvalPeriod {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Q1 2025", "January 2025"
+  periodType  String   // "MONTHLY" | "QUARTERLY" | "ANNUAL"
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  isClosed    Boolean  @default(false)
+  isLocked    Boolean  @default(false)  // True while scoring engine is running
+  createdAt   DateTime @default(now())
+
+  kpiAssignments KpiAssignment[]
+  kpiActuals     KpiActual[]
+
+  @@map("eval_periods")
+}
+
+// ─────────────────────────────────────
+// KPI DEFINITIONS & STRUCTURE
+// ─────────────────────────────────────
+
+model Pillar {
+  id          String   @id @default(cuid())
+  code        String   @unique  // "A", "B", "C", "D", "E", "F"
+  name        String            // "Delivery & Timeliness"
+  description String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  kpiDefinitions KpiDefinition[]
+  pillarWeights  PillarWeight[]
+  alphaConfigs   AlphaConfig[]
+
+  @@map("pillars")
+}
+
+model KpiDefinition {
+  id              String       @id @default(cuid())
+  code            String       @unique  // "A1.1", "B2", "C3", etc.
+  name            String                // "IPC/Payment Request Approval on-time %"
+  description     String?               // Full measure/calculation description
+  pillarId        String
+  pillar          Pillar       @relation(fields: [pillarId], references: [id])
+  unit            KpiUnit      @default(PERCENTAGE)
+  direction       KpiDirection @default(HIGHER)
+  frequency       KpiFrequency @default(MONTHLY)
+  sla             String?               // "1 day", "15th monthly"
+  dataSource      String?               // "Oracle R12", "SharePoint"
+  formula         String?               // calculation formula text
+  sortOrder       Int          @default(0)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  targets         KpiTarget[]
+  subKpiWeights   SubKpiWeight[]
+  assignments     KpiAssignment[]
+
+  @@map("kpi_definitions")
+}
+
+// ─────────────────────────────────────
+// TARGETS & WEIGHTS (configured by tier)
+// ─────────────────────────────────────
+
+model KpiTarget {
+  id              String   @id @default(cuid())
+  kpiDefinitionId String
+  kpiDefinition   KpiDefinition @relation(fields: [kpiDefinitionId], references: [id])
+  tier            Tier
+  targetValue     Float    // e.g., 95.0 for 95%, 5.0 for ≤5 complaints
+  targetOperator  String   @default(">=")  // ">=", "<=", "==" (for binary)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([kpiDefinitionId, tier])
+  @@map("kpi_targets")
+}
+
+model SubKpiWeight {
+  id              String   @id @default(cuid())
+  kpiDefinitionId String
+  kpiDefinition   KpiDefinition @relation(fields: [kpiDefinitionId], references: [id])
+  tier            Tier
+  weight          Float    // weight within the pillar (0-100), sums to 100 per pillar/tier
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([kpiDefinitionId, tier])
+  @@map("sub_kpi_weights")
+}
+
+model PillarWeight {
+  id        String   @id @default(cuid())
+  pillarId  String
+  pillar    Pillar   @relation(fields: [pillarId], references: [id])
+  tier      Tier
+  weight    Float    // percentage (0-100), sums to 100 per tier
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pillarId, tier])
+  @@map("pillar_weights")
+}
+
+model AlphaConfig {
+  id             String @id @default(cuid())
+  pillarId       String
+  pillar         Pillar @relation(fields: [pillarId], references: [id])
+  tier           Tier   // TEAM_LEAD or SECTION_HEAD only
+  alphaTeam      Float  // e.g., 0.45
+  alphaPersonal  Float  // e.g., 0.55 (= 1 - alphaTeam)
+
+  @@unique([pillarId, tier])
+  @@map("alpha_configs")
+}
+
+// ─────────────────────────────────────
+// KPI ASSIGNMENTS & ACTUALS
+// ─────────────────────────────────────
+
+model KpiAssignment {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  kpiDefinitionId String
+  kpiDefinition   KpiDefinition @relation(fields: [kpiDefinitionId], references: [id])
+  evalPeriodId    String
+  evalPeriod      EvalPeriod    @relation(fields: [evalPeriodId], references: [id])
+  targetOverride  Float?        // optional override of tier-default target
+  weightOverride  Float?        // optional override of tier-default sub-weight
+  isActive        Boolean       @default(true)
+  assignedBy      String?       // admin userId who assigned
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  actuals         KpiActual[]
+
+  @@unique([userId, kpiDefinitionId, evalPeriodId])
+  @@map("kpi_assignments")
+}
+
+model KpiActual {
+  id              String       @id @default(cuid())
+  assignmentId    String
+  assignment      KpiAssignment @relation(fields: [assignmentId], references: [id])
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  evalPeriodId    String
+  evalPeriod      EvalPeriod   @relation(fields: [evalPeriodId], references: [id])
+  actualValue     Float?       // the measured value
+  binaryValue     Boolean?     // for Pass/Fail KPIs
+  score           Int?         // calculated 0–5 score
+  status          ActualStatus @default(DRAFT)
+  submittedAt     DateTime?
+  reviewedBy      String?      // manager/admin who approved
+  reviewedAt      DateTime?
+  reviewComment   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  evidenceFiles   EvidenceFile[]
+
+  @@unique([assignmentId, evalPeriodId])
+  @@map("kpi_actuals")
+}
+
+// ─────────────────────────────────────
+// EVIDENCE & FILE UPLOADS
+// ─────────────────────────────────────
+
+model EvidenceFile {
+  id           String    @id @default(cuid())
+  actualId     String
+  actual       KpiActual @relation(fields: [actualId], references: [id], onDelete: Cascade)
+  fileName     String    // original filename
+  fileType     String    // MIME type
+  fileSize     Int       // bytes
+  storagePath  String    // Supabase Storage object path (bucket/folder/filename)
+  uploadedAt   DateTime  @default(now())
+
+  @@map("evidence_files")
+}
+
+// ─────────────────────────────────────
+// SCORING SNAPSHOTS
+// ─────────────────────────────────────
+
+model ScoreSnapshot {
+  id             String        @id @default(cuid())
+  userId         String
+  evalPeriodId   String
+  pillarCode     String        // "A", "B", etc.
+  pillarScore    Float         // out of 5
+  pillarPercent  Float         // out of 100
+  overallScore   Float?        // final weighted score (only on "OVERALL" row)
+  appraisalBand  AppraisalBand?
+  version        Int           @default(1)  // Optimistic concurrency control
+  calculatedAt   DateTime      @default(now())
+
+  @@unique([userId, evalPeriodId, pillarCode])
+  @@map("score_snapshots")
+}
+
+// ─────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String   // "KPI_ASSIGNED", "DEADLINE_REMINDER", "SCORE_PUBLISHED", "ACTUAL_REJECTED"
+  isRead    Boolean  @default(false)
+  link      String?  // deep link within app
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String   // "CREATE_KPI", "UPDATE_SCORE", "OVERRIDE_TARGET", etc.
+  entity     String   // "kpi_definition", "kpi_actual", "user", etc.
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}

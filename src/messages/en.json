@@ -1,0 +1,52 @@
+{
+  "common": {
+    "appName": "CC KPI Tracker",
+    "companyName": "Elsewedy Electric",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "noData": "No data available"
+  },
+  "auth": {
+    "login": "Sign In",
+    "logout": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?",
+    "resetPassword": "Reset Password",
+    "rememberMe": "Remember me"
+  },
+  "dashboard": {
+    "title": "My Dashboard",
+    "overallScore": "Overall Score",
+    "pillarScores": "Pillar Scores",
+    "myKpis": "My KPIs",
+    "upcomingDeadlines": "Upcoming Deadlines",
+    "trend": "Performance Trend"
+  },
+  "kpi": {
+    "target": "Target",
+    "actual": "Actual",
+    "score": "Score",
+    "status": "Status",
+    "evidence": "Evidence",
+    "submitActual": "Submit Actual",
+    "uploadEvidence": "Upload Evidence"
+  },
+  "pillars": {
+    "A": "Delivery & Timeliness",
+    "B": "Data Quality & Governance",
+    "C": "Forecasting & Cost Control",
+    "D": "Communication & Stakeholders",
+    "E": "Attendance & Conduct",
+    "F": "Growth & Coaching"
+  }
+}

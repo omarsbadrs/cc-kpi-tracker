@@ -1,26 +1,127 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────
+   THEME: Dark Mode First Design System
+   ───────────────────────────────────── */
+
 :root {
+  /* Light mode defaults */
   --background: #ffffff;
-  --foreground: #171717;
+  --background-secondary: #f8fafc;
+  --background-card: #ffffff;
+  --foreground: #0f172a;
+  --foreground-secondary: #475569;
+  --foreground-muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-hover: #cbd5e1;
+  --input: #f1f5f9;
+  --ring: #3b82f6;
+
+  /* Sidebar */
+  --sidebar-bg: #f8fafc;
+  --sidebar-border: #e2e8f0;
+  --sidebar-text: #334155;
+  --sidebar-active: #3b82f6;
+
+  /* Cards */
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --card-hover: #f8fafc;
+}
+
+.dark {
+  --background: #0a0a0f;
+  --background-secondary: #111118;
+  --background-card: #1a1a25;
+  --foreground: #e2e8f0;
+  --foreground-secondary: #94a3b8;
+  --foreground-muted: #64748b;
+  --border: #1e293b;
+  --border-hover: #334155;
+  --input: #1e1e2e;
+  --ring: #3b82f6;
+
+  --sidebar-bg: #111118;
+  --sidebar-border: #1e293b;
+  --sidebar-text: #94a3b8;
+  --sidebar-active: #3b82f6;
+
+  --card-bg: #1a1a25;
+  --card-border: #1e293b;
+  --card-hover: #22222f;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-background-card: var(--background-card);
   --color-foreground: var(--foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+  --color-card-hover: var(--card-hover);
+
+  /* Pillar accent colors */
+  --color-pillar-a: #22c55e;
+  --color-pillar-b: #3b82f6;
+  --color-pillar-c: #f59e0b;
+  --color-pillar-d: #8b5cf6;
+  --color-pillar-e: #ef4444;
+  --color-pillar-f: #06b6d4;
+
+  /* Score colors */
+  --color-score-5: #22c55e;
+  --color-score-4: #84cc16;
+  --color-score-3: #f59e0b;
+  --color-score-2: #f97316;
+  --color-score-1: #ef4444;
+  --color-score-0: #991b1b;
+
+  /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ─────────────────────────────────────
+   BASE STYLES
+   ───────────────────────────────────── */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Focus ring for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Scrollbar styling for dark mode */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-muted);
 }

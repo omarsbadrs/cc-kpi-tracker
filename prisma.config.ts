@@ -10,6 +10,6 @@ export default defineConfig({
   datasource: {
     // Use DIRECT_URL for schema operations (migrations, db push) since PgBouncer doesn't support them
     // Falls back to DATABASE_URL for runtime queries
-    url: process.env["DIRECT_URL"] || process.env["DATABASE_URL"],
+    url: process.env["DIRECT_URL"] || process.env["DATABASE_URL"] || "",
   },
 })

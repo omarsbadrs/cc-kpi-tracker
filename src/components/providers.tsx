@@ -48,30 +48,32 @@ export function useTheme() {
 }
 
 function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark")
-  const [mounted, setMounted] = useState(false)
+  const [state, setState] = useState<{ theme: Theme; mounted: boolean }>({
+    theme: "dark",
+    mounted: false,
+  })
 
   useEffect(() => {
-    setMounted(true)
     const stored = localStorage.getItem("theme") as Theme | null
     const initial = stored || "dark"
-    setTheme(initial)
     document.documentElement.classList.toggle("dark", initial === "dark")
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: read localStorage once on mount
+    setState({ theme: initial, mounted: true })
   }, [])
 
   const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark"
-    setTheme(next)
+    const next = state.theme === "dark" ? "light" : "dark"
+    setState((prev) => ({ ...prev, theme: next }))
     localStorage.setItem("theme", next)
     document.documentElement.classList.toggle("dark", next === "dark")
   }
 
-  if (!mounted) {
+  if (!state.mounted) {
     return <div className="dark">{children}</div>
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: state.theme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   )

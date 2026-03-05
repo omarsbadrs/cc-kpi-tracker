@@ -14,7 +14,7 @@ type AuthenticatedHandler = (
 ) => Promise<NextResponse>
 
 export function withAuth(handler: AuthenticatedHandler, requiredRole?: Role) {
-  return async (req: NextRequest, ctx?: { params: Promise<Record<string, string>> }) => {
+  return async (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => {
     try {
       const session = await auth()
       if (!session?.user) {
@@ -29,7 +29,7 @@ export function withAuth(handler: AuthenticatedHandler, requiredRole?: Role) {
         }
       }
 
-      const params = ctx?.params ? await ctx.params : undefined
+      const params = ctx.params ? await ctx.params : undefined
       return await handler(req, { session, params })
     } catch (err) {
       logger.error(

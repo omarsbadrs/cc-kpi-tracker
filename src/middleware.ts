@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 
-const publicRoutes = ["/login", "/forgot-password", "/reset-password", "/api/auth", "/api/health"]
+const publicRoutes = ["/login", "/forgot-password", "/reset-password", "/api/auth", "/api/health", "/api/ping"]
 
 function isPublicRoute(pathname: string): boolean {
   return publicRoutes.some((route) => pathname.startsWith(route))
@@ -10,6 +10,11 @@ function isPublicRoute(pathname: string): boolean {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // API routes that don't need any auth checking — pass through immediately
+  if (pathname.startsWith("/api/health") || pathname.startsWith("/api/ping")) {
+    return NextResponse.next()
+  }
 
   // Allow public routes
   if (isPublicRoute(pathname) || pathname === "/") {

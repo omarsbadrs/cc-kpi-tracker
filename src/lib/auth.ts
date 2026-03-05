@@ -76,7 +76,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
-        // Check account lockout
         if (user.lockedUntil && user.lockedUntil > new Date()) {
           logger.warn({ email, lockedUntil: user.lockedUntil }, "Login attempt on locked account")
           return null
@@ -90,7 +89,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             failedLoginAttempts: attempts,
           }
 
-          // Lock after 5 failed attempts for 15 minutes
           if (attempts >= 5) {
             updateData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000)
             logger.warn({ email, attempts }, "Account locked after failed attempts")
@@ -104,7 +102,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
-        // Successful login — reset failed attempts
         await prisma.user.update({
           where: { id: user.id },
           data: {

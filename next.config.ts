@@ -28,7 +28,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client", ".prisma/client"],
+  // No serverExternalPackages - let Turbopack bundle everything
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }]
   },

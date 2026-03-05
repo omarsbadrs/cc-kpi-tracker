@@ -18,8 +18,12 @@ function LoginForm() {
       const result = await loginAction(formData)
       if (result?.error) {
         setError(result.error)
+        return
       }
-      // If no error, NextAuth handles the redirect via thrown NEXT_REDIRECT
+      if (result?.success) {
+        // Hard navigation to ensure full page load with fresh session
+        window.location.href = "/dashboard"
+      }
     })
   }
 

@@ -1,52 +1,26 @@
 "use client"
 
-import { signIn } from "next-auth/react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useState, type FormEvent } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useState, useTransition } from "react"
 import Link from "next/link"
+import { loginAction } from "./actions"
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
+  const errorParam = searchParams.get("error")
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(errorParam ? "Invalid email or password." : "")
+  const [isPending, startTransition] = useTransition()
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
+  function handleSubmit(formData: FormData) {
     setError("")
-    setLoading(true)
-
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      })
-
-      setLoading(false)
-
-      if (!result) {
-        setError("Sign in failed. Please try again.")
-        return
+    startTransition(async () => {
+      const result = await loginAction(formData)
+      if (result?.error) {
+        setError(result.error)
       }
-
-      if (result.error) {
-        setError("Invalid email or password. Please try again.")
-        return
-      }
-
-      if (result.ok) {
-        router.push(callbackUrl)
-        router.refresh()
-      }
-    } catch {
-      setLoading(false)
-      setError("A network error occurred. Please try again.")
-    }
+      // If no error, NextAuth handles the redirect via thrown NEXT_REDIRECT
+    })
   }
 
   return (
@@ -71,16 +45,15 @@ function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form action={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-foreground-secondary">
             Email
           </label>
           <input
             id="email"
+            name="email"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             placeholder="name@elsewedy.com"
             required
             autoComplete="email"
@@ -94,9 +67,8 @@ function LoginForm() {
           </label>
           <input
             id="password"
+            name="password"
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
             required
             autoComplete="current-password"
@@ -119,10 +91,10 @@ function LoginForm() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={isPending}
           className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? "Signing in..." : "Sign In"}
+          {isPending ? "Signing in..." : "Sign In"}
         </button>
       </form>
 

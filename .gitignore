@@ -70,3 +70,5 @@ prisma/*.db-journal
 /src/generated/prisma
 
 .vercel
+.github/
+cookies.txt

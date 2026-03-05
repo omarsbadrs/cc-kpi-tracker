@@ -14,13 +14,17 @@ function shouldLog(level: LogLevel): boolean {
 }
 
 function formatMessage(level: LogLevel, data: Record<string, unknown>, msg?: string) {
-  const entry = {
-    level,
-    time: Date.now(),
-    ...(msg ? { msg } : {}),
-    ...data,
+  try {
+    const entry = {
+      level,
+      time: Date.now(),
+      ...(msg ? { msg } : {}),
+      ...data,
+    }
+    return JSON.stringify(entry)
+  } catch {
+    return JSON.stringify({ level, time: Date.now(), msg: msg || "log serialization failed" })
   }
-  return JSON.stringify(entry)
 }
 
 export const logger = {

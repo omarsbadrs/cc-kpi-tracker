@@ -57,7 +57,6 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem("theme") as Theme | null
     const initial = stored || "dark"
     document.documentElement.classList.toggle("dark", initial === "dark")
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration: read localStorage once on mount
     setState({ theme: initial, mounted: true })
   }, [])
 

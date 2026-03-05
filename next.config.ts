@@ -28,7 +28,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pino", "pino-pretty"],
+  serverExternalPackages: ["pino", "pino-pretty", "@prisma/adapter-pg", "pg"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }]
   },

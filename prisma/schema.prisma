@@ -2,7 +2,8 @@
 // CC KPI Tracker — Full schema from CLAUDE.md Section 4.2
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

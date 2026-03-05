@@ -20,21 +20,33 @@ function LoginForm() {
     setError("")
     setLoading(true)
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    })
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      })
 
-    setLoading(false)
+      setLoading(false)
 
-    if (result?.error) {
-      setError("Invalid email or password. Please try again.")
-      return
+      if (!result) {
+        setError("Sign in failed. Please try again.")
+        return
+      }
+
+      if (result.error) {
+        setError("Invalid email or password. Please try again.")
+        return
+      }
+
+      if (result.ok) {
+        router.push(callbackUrl)
+        router.refresh()
+      }
+    } catch {
+      setLoading(false)
+      setError("A network error occurred. Please try again.")
     }
-
-    router.push(callbackUrl)
-    router.refresh()
   }
 
   return (

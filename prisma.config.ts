@@ -5,10 +5,11 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    seed: "npx ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
   },
   datasource: {
-    // Supabase pooled connection (Transaction mode, port 6543)
-    // For migrations, set DIRECT_URL in .env and use: DATABASE_URL=$DIRECT_URL npx prisma migrate dev
-    url: process.env["DATABASE_URL"],
+    // Use DIRECT_URL for schema operations (migrations, db push) since PgBouncer doesn't support them
+    // Falls back to DATABASE_URL for runtime queries
+    url: process.env["DIRECT_URL"] || process.env["DATABASE_URL"],
   },
 })

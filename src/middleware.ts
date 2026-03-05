@@ -1,5 +1,6 @@
-import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import { getToken } from "next-auth/jwt"
 
 const publicRoutes = ["/login", "/forgot-password", "/reset-password", "/api/auth", "/api/health"]
 
@@ -7,14 +8,15 @@ function isPublicRoute(pathname: string): boolean {
   return publicRoutes.some((route) => pathname.startsWith(route))
 }
 
-export default auth((req) => {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Allow public routes
   if (isPublicRoute(pathname) || pathname === "/") {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     // If logged in and on login page, redirect to dashboard
-    if (req.auth?.user && pathname === "/login") {
-      const role = req.auth.user.role
+    if (token && pathname === "/login") {
+      const role = token.role as string
       const dashboardUrl =
         role === "ADMIN"
           ? "/admin/dashboard"
@@ -26,14 +28,16 @@ export default auth((req) => {
     return NextResponse.next()
   }
 
-  // Protect all other routes
-  if (!req.auth?.user) {
+  // Protect all other routes — decode JWT without DB access
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+
+  if (!token) {
     const loginUrl = new URL("/login", req.url)
     loginUrl.searchParams.set("callbackUrl", pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  const role = req.auth.user.role
+  const role = token.role as string
 
   // Admin routes
   if (pathname.startsWith("/admin") && role !== "ADMIN") {
@@ -46,7 +50,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next()
-})
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],

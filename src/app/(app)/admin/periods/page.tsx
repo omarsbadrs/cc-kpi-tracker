@@ -40,7 +40,7 @@ const emptyForm: FormData = {
 
 function toDateInput(dateStr: string | undefined | null): string {
   if (!dateStr) return ""
-  return new Date(dateStr).toISOString().split("T")[0]
+  return new Date(dateStr).toISOString().split("T")[0] ?? ""
 }
 
 export default function PeriodsPage() {

@@ -100,8 +100,8 @@ export const PATCH = withAuth(async (req, { params, session }) => {
           : "UPDATE_USER",
         entity: "user",
         entityId: id,
-        oldValue: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.from])),
-        newValue: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.to])),
+        oldValue: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.from])) as Record<string, unknown> as import("@prisma/client/runtime/library").JsonObject,
+        newValue: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.to])) as Record<string, unknown> as import("@prisma/client/runtime/library").JsonObject,
       },
     })
   }

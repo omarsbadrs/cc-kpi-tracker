@@ -41,6 +41,7 @@ export const GET = withAuth(async (req) => {
         isActive: true,
         avatarUrl: true,
         departmentId: true,
+        managerId: true,
         lastLoginAt: true,
         createdAt: true,
       },
@@ -53,7 +54,7 @@ export const GET = withAuth(async (req) => {
   return success(users, buildMeta(page, pageSize, total))
 }, "ADMIN")
 
-export const POST = withAuth(async (req) => {
+export const POST = withAuth(async (req, { session }) => {
   const body = await req.json()
   const parsed = createUserSchema.safeParse(body)
   if (!parsed.success) {
@@ -106,6 +107,16 @@ export const POST = withAuth(async (req) => {
       role: true,
       tier: true,
       createdAt: true,
+    },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      userId: session.user.id,
+      action: "CREATE_USER",
+      entity: "user",
+      entityId: user.id,
+      newValue: { email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, tier: user.tier },
     },
   })
 

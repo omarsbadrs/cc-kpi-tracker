@@ -18,6 +18,8 @@ export const GET = withAuth(async (req, { session }) => {
       departmentId: true,
       managerId: true,
       nationality: true,
+      graduationYear: true,
+      functionProject: true,
       preferredLocale: true,
       department: { select: { name: true } },
       company: { select: { name: true } },

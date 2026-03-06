@@ -24,7 +24,8 @@ export function useUnreadCount() {
       const json = await res.json()
       return json.meta?.total || 0
     },
-    refetchInterval: 30000, // Poll every 30 seconds
+    refetchInterval: 60000, // Poll every 60 seconds
+    refetchIntervalInBackground: false, // Stop polling when tab is hidden
   })
 }
 

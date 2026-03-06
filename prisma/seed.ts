@@ -63,8 +63,8 @@ interface KpiDef {
   sla?: string
   dataSource?: string
   formula?: string
-  targets: Record<Tier, number>  // target value per tier
-  weights: Record<Tier, number>  // sub-KPI weight within pillar per tier
+  targets: Record<Tier, number>
+  weights: Record<Tier, number>
 }
 
 const kpiDefinitions: KpiDef[] = [
@@ -113,14 +113,77 @@ const kpiDefinitions: KpiDef[] = [
 ]
 
 // ─────────────────────────────────────
-// DEMO USERS (Section 21)
+// TEAM DIRECTORY — Real Department Members
+// Source: Team_Contact_Directory.xlsx (30 members)
 // ─────────────────────────────────────
 
-const demoUsers = [
-  { email: "admin@elsewedy.com", password: "Admin@2025", firstName: "Admin", lastName: "User", role: "ADMIN" as const, tier: "SECTION_HEAD" as const, jobTitle: "System Administrator" },
-  { email: "manager@elsewedy.com", password: "Manager@2025", firstName: "Manager", lastName: "User", role: "MANAGER" as const, tier: "TEAM_LEAD" as const, jobTitle: "Cost Control Team Lead" },
-  { email: "engineer@elsewedy.com", password: "User@2025", firstName: "Engineer", lastName: "User", role: "USER" as const, tier: "ENGINEER" as const, jobTitle: "Cost Control Engineer" },
+interface TeamMember {
+  employeeId: string | null
+  firstName: string
+  lastName: string
+  email: string
+  jobTitle: string
+  tier: Tier
+  role: "ADMIN" | "MANAGER" | "USER"
+  nationality: string
+  graduationYear: number | null
+  functionProject: string
+  managerEmail?: string // email of direct manager
+}
+
+// Manager emails for easy reference
+const MGR = {
+  OMAR_BREAK: "omar.break@elsewedypsp.com",
+  MOSTAFA_MAGDY: "mostafa.magdy@elsewedypsp.com",
+  HASSANEIN: "mostafa.hassanein@elsewedypsp.com",
+  ABDULLAH: "abdullah.shehata@elsewedypsp.com",
+  ESLAM: "eslam.taha@elsewedypsp.com",
+  HADEER: "hadeer.sayed@elsewedypsp.com",
+  MAHMOUD_SAMY: "mahmouds.youssef@elsewedypsp.com",
+}
+
+const teamMembers: TeamMember[] = [
+  // Head of Department — ADMIN (no manager)
+  { employeeId: null, firstName: "Omar", lastName: "Break", email: "omar.break@elsewedypsp.com", jobTitle: "Head of Cost Control Department", tier: "SECTION_HEAD", role: "ADMIN", nationality: "Egyptian", graduationYear: 2013, functionProject: "Head of Cost Control Department" },
+  // Project Controls Director — reports to Head
+  { employeeId: null, firstName: "Ayman", lastName: "Demerdash", email: "ayman.demerdash@elsewedypsp.com", jobTitle: "Project Controls Director", tier: "SECTION_HEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: null, functionProject: "SG&A - Project Controls Director", managerEmail: MGR.OMAR_BREAK },
+  // Project Manager — reports to Head
+  { employeeId: "6403", firstName: "Mohamed", lastName: "Sharkas", email: "mohamed.sharkas@elsewedypsp.com", jobTitle: "Cost Control Project Manager", tier: "TEAM_LEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2007, functionProject: "Power Generation", managerEmail: MGR.OMAR_BREAK },
+  // Section Head — reports to Head
+  { employeeId: "2821", firstName: "Mostafa", lastName: "Magdy", email: "mostafa.magdy@elsewedypsp.com", jobTitle: "Cost Control Section Head", tier: "SECTION_HEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2011, functionProject: "Synchronous, Substations & Rail", managerEmail: MGR.OMAR_BREAK },
+  // Lead Analysts / Lead Engineers — report to Section Head (Mostafa Magdy)
+  { employeeId: "2945", firstName: "Mostafa", lastName: "Hassanein", email: "mostafa.hassanein@elsewedypsp.com", jobTitle: "Cost Control Lead Analyst", tier: "TEAM_LEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2006, functionProject: "SG&A - Administration", managerEmail: MGR.MOSTAFA_MAGDY },
+  { employeeId: "5518", firstName: "Abdullah", lastName: "Shehata", email: "abdullah.shehata@elsewedypsp.com", jobTitle: "Cost Control Lead Engineer", tier: "TEAM_LEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2017, functionProject: "Rabigh CCPP", managerEmail: MGR.MOSTAFA_MAGDY },
+  { employeeId: "6777", firstName: "Eslam", lastName: "Taha", email: "eslam.taha@elsewedypsp.com", jobTitle: "Cost Control Lead Engineer", tier: "TEAM_LEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2016, functionProject: "HSR-JV-IMP", managerEmail: MGR.MOSTAFA_MAGDY },
+  { employeeId: "6083", firstName: "Hadeer", lastName: "Reda", email: "hadeer.sayed@elsewedypsp.com", jobTitle: "Cost Control Lead Engineer", tier: "TEAM_LEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2014, functionProject: "KSA - Synchronous Hub", managerEmail: MGR.MOSTAFA_MAGDY },
+  { employeeId: "6866", firstName: "Mahmoud", lastName: "Samy", email: "mahmouds.youssef@elsewedypsp.com", jobTitle: "Cost Control Lead Engineer", tier: "TEAM_LEAD", role: "MANAGER", nationality: "Egyptian", graduationYear: 2015, functionProject: "SG&A - Self Execution Hub", managerEmail: MGR.MOSTAFA_MAGDY },
+  // Senior Engineers — distributed across leads
+  { employeeId: "6518", firstName: "Abdelrahman", lastName: "Bargal", email: "abdelrahman.shebl@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2017, functionProject: "Matra CCPP", managerEmail: MGR.HASSANEIN },
+  { employeeId: "6644", firstName: "Ahmed", lastName: "El-Said", email: "ahmede.ali@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2017, functionProject: "Al-Mourjan CCPP", managerEmail: MGR.HASSANEIN },
+  { employeeId: "5113", firstName: "Ahmed", lastName: "Ibrahim", email: "ahmed.wahab@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2018, functionProject: "KSA - Synchronous Hub", managerEmail: MGR.ABDULLAH },
+  { employeeId: "6376", firstName: "Mohamed", lastName: "Barakat", email: "mohamed.barakat@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2018, functionProject: "Rabigh CCPP", managerEmail: MGR.ABDULLAH },
+  { employeeId: "5928", firstName: "Mohamed", lastName: "Dawood", email: "mohamed.a.abdelrazeq@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2018, functionProject: "KSA - Substation Hub", managerEmail: MGR.ESLAM },
+  { employeeId: "5150", firstName: "Mohamed", lastName: "Mossa", email: "mohamed.mossa@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2018, functionProject: "KSA Construction and Installation Works", managerEmail: MGR.ESLAM },
+  { employeeId: "5684", firstName: "Omar", lastName: "Badr", email: "omar.badr@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2020, functionProject: "SG&A - Digitalization and Excellence", managerEmail: MGR.HADEER },
+  { employeeId: "6568", firstName: "Omar", lastName: "Bakr", email: "omar.bakr@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2017, functionProject: "High Speed Rail Self Execution Hub", managerEmail: MGR.HADEER },
+  { employeeId: "6708", firstName: "Omar", lastName: "Essam", email: "omar.erfan@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2020, functionProject: "KSA - Substation Hub", managerEmail: MGR.MAHMOUD_SAMY },
+  { employeeId: "6679", firstName: "Samira", lastName: "El-Attar", email: "samira.elattar@elsewedypsp.com", jobTitle: "Cost Control Senior Engineer", tier: "SENIOR", role: "USER", nationality: "Egyptian", graduationYear: 2020, functionProject: "SG&A - Integration & Governance", managerEmail: MGR.MAHMOUD_SAMY },
+  // Engineers — distributed across leads
+  { employeeId: "6926", firstName: "Abdelrahman", lastName: "Mohamed", email: "abdelrahmanm.elsayed@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: 2022, functionProject: "KSA - Synchronous Hub", managerEmail: MGR.HASSANEIN },
+  { employeeId: "5831", firstName: "Mahmoud", lastName: "Shalaby", email: "mahmoud.m.shalaby@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: 2017, functionProject: "High Speed Rail Self Execution Hub", managerEmail: MGR.ABDULLAH },
+  { employeeId: "6390", firstName: "Mohamed", lastName: "El-Shafei", email: "mohamed.elshafei@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: 2022, functionProject: "SG&A - Digitalization and Excellence", managerEmail: MGR.ESLAM },
+  { employeeId: "6653", firstName: "Mostafa", lastName: "Imam", email: "mostafa.imam@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: 2022, functionProject: "KSA - Synchronous Hub", managerEmail: MGR.HADEER },
+  { employeeId: "6903", firstName: "Mostafa", lastName: "Reda", email: "mostafa.reda@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: 2021, functionProject: "Al-Mourjan CCPP", managerEmail: MGR.MAHMOUD_SAMY },
+  { employeeId: null, firstName: "Youssef", lastName: "Medhat", email: "youssef.mostafa@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: null, functionProject: "SG&A - Digitalization and Excellence", managerEmail: MGR.HASSANEIN },
+  { employeeId: "5817", firstName: "Bassem", lastName: "Essam", email: "basem.abaas@elsewedypsp.com", jobTitle: "Cost Control Engineer", tier: "ENGINEER", role: "USER", nationality: "Egyptian", graduationYear: 2022, functionProject: "KSA - Substation Hub", managerEmail: MGR.ABDULLAH },
+  // Junior Engineers — distributed across leads
+  { employeeId: "6252", firstName: "Mohamed", lastName: "AlaaEldin", email: "mohamed.saeed@elsewedypsp.com", jobTitle: "Cost Control Junior Engineer", tier: "JUNIOR", role: "USER", nationality: "Egyptian", graduationYear: 2023, functionProject: "GDP - Graduation Development Program", managerEmail: MGR.ESLAM },
+  { employeeId: "6213", firstName: "Omar", lastName: "Agag", email: "omar.agag@elsewedypsp.com", jobTitle: "Cost Control Junior Engineer", tier: "JUNIOR", role: "USER", nationality: "Egyptian", graduationYear: 2024, functionProject: "GDP - Graduation Development Program", managerEmail: MGR.HADEER },
+  { employeeId: "6776", firstName: "Ali", lastName: "El-Zoghabi", email: "ali.elzoghbi@elsewedypsp.com", jobTitle: "Cost Control Junior Engineer", tier: "JUNIOR", role: "USER", nationality: "Egyptian", graduationYear: 2025, functionProject: "GDP - Graduation Development Program", managerEmail: MGR.MAHMOUD_SAMY },
 ]
+
+// Default password for all seeded users
+const DEFAULT_PASSWORD = "Elsewedy@2025"
 
 // ─────────────────────────────────────
 // MAIN SEED FUNCTION
@@ -135,7 +198,7 @@ async function main() {
     update: {},
     create: {
       id: "elsewedy-electric",
-      name: "Elsewedy Electric",
+      name: "Elsewedy Electric PSP",
       sector: "EPC / Engineering",
     },
   })
@@ -215,11 +278,9 @@ async function main() {
     })
     kpiCount++
 
-    // Create targets for each tier
     for (const tier of tiers) {
       const targetValue = kpi.targets[tier]
       const targetOperator = kpi.direction === "LOWER" ? "<=" : kpi.direction === "BINARY" ? "==" : ">="
-
       await prisma.kpiTarget.upsert({
         where: { kpiDefinitionId_tier: { kpiDefinitionId: kpiDef.id, tier } },
         update: { targetValue, targetOperator },
@@ -228,7 +289,6 @@ async function main() {
       targetCount++
     }
 
-    // Create sub-KPI weights for each tier
     for (const tier of tiers) {
       await prisma.subKpiWeight.upsert({
         where: { kpiDefinitionId_tier: { kpiDefinitionId: kpiDef.id, tier } },
@@ -242,26 +302,59 @@ async function main() {
   console.log(`  ✓ ${targetCount} KPI Targets created`)
   console.log(`  ✓ ${weightCount} Sub-KPI Weights created`)
 
-  // 7. Create demo users
-  for (const user of demoUsers) {
-    const hashedPassword = await bcrypt.hash(user.password, 12)
+  // 7. Create team members from real directory
+  const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12)
+  let userCount = 0
+
+  for (const member of teamMembers) {
     await prisma.user.upsert({
-      where: { email: user.email },
-      update: {},
+      where: { email: member.email },
+      update: {
+        firstName: member.firstName,
+        lastName: member.lastName,
+        employeeId: member.employeeId,
+        role: member.role,
+        tier: member.tier,
+        jobTitle: member.jobTitle,
+        nationality: member.nationality,
+        graduationYear: member.graduationYear,
+        functionProject: member.functionProject,
+      },
       create: {
-        email: user.email,
+        email: member.email,
         passwordHash: hashedPassword,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        tier: user.tier,
-        jobTitle: user.jobTitle,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        employeeId: member.employeeId,
+        role: member.role,
+        tier: member.tier,
+        jobTitle: member.jobTitle,
+        nationality: member.nationality,
+        graduationYear: member.graduationYear,
+        functionProject: member.functionProject,
         companyId: company.id,
         departmentId: department.id,
       },
     })
+    userCount++
   }
-  console.log("  ✓ 3 Demo Users created")
+  console.log(`  ✓ ${userCount} Team Members created (password: ${DEFAULT_PASSWORD})`)
+
+  // 7b. Set manager relationships
+  let managerLinks = 0
+  for (const member of teamMembers) {
+    if (member.managerEmail) {
+      const manager = await prisma.user.findUnique({ where: { email: member.managerEmail }, select: { id: true } })
+      if (manager) {
+        await prisma.user.update({
+          where: { email: member.email },
+          data: { managerId: manager.id },
+        })
+        managerLinks++
+      }
+    }
+  }
+  console.log(`  ✓ ${managerLinks} Manager relationships set`)
 
   // 8. Create demo evaluation period (current month)
   const now = new Date()
@@ -284,7 +377,7 @@ async function main() {
   console.log("  ✓ Demo Eval Period created")
 
   console.log("\n✅ Seed complete!")
-  console.log(`   Total: 1 company, 1 department, 6 pillars, ${kpiCount} KPIs, ${targetCount} targets, ${weightCount} weights, 30 pillar weights, 12 alpha configs, 3 users, 1 eval period`)
+  console.log(`   Total: 1 company, 1 department, 6 pillars, ${kpiCount} KPIs, ${targetCount} targets, ${weightCount} weights, 30 pillar weights, 12 alpha configs, ${userCount} users, 1 eval period`)
 }
 
 main()

@@ -27,7 +27,11 @@ export function UserMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-medium text-white hover:bg-blue-700"
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+        style={{
+          background: "linear-gradient(135deg, #f59e0b, #ef4444)",
+          color: "#fff",
+        }}
         aria-label="User menu"
         aria-expanded={isOpen}
       >
@@ -35,24 +39,24 @@ export function UserMenu() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-lg border border-border bg-background-card shadow-lg">
+        <div className="dropdown-menu absolute right-0 mt-2 w-56">
           <div className="border-b border-border px-4 py-3">
             <p className="text-sm font-medium text-foreground">
               {session.user.firstName} {session.user.lastName}
             </p>
             <p className="text-xs text-foreground-muted">{session.user.email}</p>
           </div>
-          <div className="p-1">
+          <div className="p-1.5">
             <Link
               href="/profile"
               onClick={() => setIsOpen(false)}
-              className="block rounded-md px-3 py-2 text-sm text-foreground-secondary hover:bg-card-hover"
+              className="block rounded-xl px-3 py-2 text-sm text-foreground-secondary hover:bg-card-hover transition-colors"
             >
               Profile
             </Link>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="w-full rounded-md px-3 py-2 text-left text-sm text-red-400 hover:bg-card-hover"
+              className="w-full rounded-xl px-3 py-2 text-left text-sm text-red-400 hover:bg-card-hover transition-colors"
             >
               Sign Out
             </button>

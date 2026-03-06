@@ -26,12 +26,21 @@ export const GET = withAuth(async (req, { session }) => {
   }
   if (evalPeriodId) where.evalPeriodId = evalPeriodId
 
+  // Get user tier so we can include the tier-specific target
+  const user = await prisma.user.findUnique({
+    where: { id: effectiveUserId },
+    select: { tier: true },
+  })
+
   const [assignments, total] = await Promise.all([
     prisma.kpiAssignment.findMany({
       where,
       include: {
         kpiDefinition: {
-          include: { pillar: { select: { code: true, name: true } } },
+          include: {
+            pillar: { select: { code: true, name: true } },
+            targets: user ? { where: { tier: user.tier }, take: 1 } : false,
+          },
         },
         evalPeriod: {
           select: { name: true, startDate: true, endDate: true },
@@ -63,29 +72,21 @@ export const POST = withAuth(async (req) => {
       return error(404, "NOT_FOUND", "Evaluation period not found")
     }
 
-    const created = []
-    for (const userId of userIds) {
-      for (const kpiDefinitionId of kpiDefinitionIds) {
-        const existing = await prisma.kpiAssignment.findUnique({
-          where: {
-            userId_kpiDefinitionId_evalPeriodId: {
-              userId,
-              kpiDefinitionId,
-              evalPeriodId,
-            },
-          },
-        })
-        if (!existing) {
-          const assignment = await prisma.kpiAssignment.create({
-            data: { userId, kpiDefinitionId, evalPeriodId },
-          })
-          created.push(assignment)
-        }
-      }
-    }
+    const data = userIds.flatMap((userId) =>
+      kpiDefinitionIds.map((kpiDefinitionId) => ({
+        userId,
+        kpiDefinitionId,
+        evalPeriodId,
+      }))
+    )
 
-    logger.info({ count: created.length }, "Bulk KPI assignments created")
-    return success({ created: created.length })
+    const result = await prisma.kpiAssignment.createMany({
+      data,
+      skipDuplicates: true,
+    })
+
+    logger.info({ count: result.count }, "Bulk KPI assignments created")
+    return success({ created: result.count })
   }
 
   // Single assignment

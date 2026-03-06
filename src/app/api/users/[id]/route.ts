@@ -22,8 +22,11 @@ export const GET = withAuth(async (req, { params }) => {
       isActive: true,
       avatarUrl: true,
       departmentId: true,
+      department: { select: { name: true } },
       managerId: true,
       nationality: true,
+      graduationYear: true,
+      functionProject: true,
       preferredLocale: true,
       lastLoginAt: true,
       createdAt: true,
@@ -35,7 +38,7 @@ export const GET = withAuth(async (req, { params }) => {
   return success(user)
 })
 
-export const PATCH = withAuth(async (req, { params }) => {
+export const PATCH = withAuth(async (req, { params, session }) => {
   const id = params?.id
   if (!id) return error(400, "VALIDATION_ERROR", "Missing user ID")
 
@@ -53,7 +56,15 @@ export const PATCH = withAuth(async (req, { params }) => {
     )
   }
 
-  const existing = await prisma.user.findUnique({ where: { id } })
+  const existing = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      firstName: true, lastName: true, email: true,
+      role: true, tier: true, jobTitle: true,
+      isActive: true, employeeId: true, nationality: true,
+      graduationYear: true, functionProject: true,
+    },
+  })
   if (!existing) return error(404, "NOT_FOUND", "User not found")
 
   const user = await prisma.user.update({
@@ -66,24 +77,63 @@ export const PATCH = withAuth(async (req, { params }) => {
       lastName: true,
       role: true,
       tier: true,
+      isActive: true,
       updatedAt: true,
     },
   })
+
+  // Build change diff for audit log
+  const changes: Record<string, { from: unknown; to: unknown }> = {}
+  for (const [key, newVal] of Object.entries(parsed.data)) {
+    const oldVal = existing[key as keyof typeof existing]
+    if (oldVal !== newVal && newVal !== undefined) {
+      changes[key] = { from: oldVal, to: newVal }
+    }
+  }
+
+  if (Object.keys(changes).length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        action: changes.isActive !== undefined
+          ? (changes.isActive.to ? "ACTIVATE_USER" : "DEACTIVATE_USER")
+          : "UPDATE_USER",
+        entity: "user",
+        entityId: id,
+        oldValue: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.from])),
+        newValue: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.to])),
+      },
+    })
+  }
 
   logger.info({ userId: id }, "User updated")
   return success(user)
 }, "ADMIN")
 
-export const DELETE = withAuth(async (req, { params }) => {
+export const DELETE = withAuth(async (req, { params, session }) => {
   const id = params?.id
   if (!id) return error(400, "VALIDATION_ERROR", "Missing user ID")
 
-  const existing = await prisma.user.findUnique({ where: { id } })
+  const existing = await prisma.user.findUnique({
+    where: { id },
+    select: { firstName: true, lastName: true, email: true },
+  })
   if (!existing) return error(404, "NOT_FOUND", "User not found")
 
   await prisma.user.update({
     where: { id },
     data: { isActive: false },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      userId: session.user.id,
+      action: "DEACTIVATE_USER",
+      entity: "user",
+      entityId: id,
+      oldValue: { isActive: true },
+      newValue: { isActive: false, name: `${existing.firstName} ${existing.lastName}` },
+    },
   })
 
   logger.info({ userId: id }, "User deactivated")

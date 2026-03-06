@@ -22,7 +22,7 @@ export const TIER_LABELS = {
   ENGINEER: "Cost Control Engineer",
   SENIOR: "Senior Cost Control Engineer",
   TEAM_LEAD: "Cost Control Team Lead",
-  SECTION_HEAD: "Cost Control Section Head",
+  SECTION_HEAD: "Head of Department",
 } as const
 
 // ─────────────────────────────────────

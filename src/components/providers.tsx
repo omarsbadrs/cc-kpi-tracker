@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { SessionProvider } from "next-auth/react"
-import { useState, useEffect, createContext, useContext, type ReactNode } from "react"
+import { useState, useEffect, useCallback, useMemo, createContext, useContext, type ReactNode } from "react"
 
 // ─────────────────────────────────────
 // Query Provider
@@ -60,19 +60,23 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     setState({ theme: initial, mounted: true })
   }, [])
 
-  const toggleTheme = () => {
-    const next = state.theme === "dark" ? "light" : "dark"
-    setState((prev) => ({ ...prev, theme: next }))
-    localStorage.setItem("theme", next)
-    document.documentElement.classList.toggle("dark", next === "dark")
-  }
+  const toggleTheme = useCallback(() => {
+    setState((prev) => {
+      const next = prev.theme === "dark" ? "light" : "dark"
+      localStorage.setItem("theme", next)
+      document.documentElement.classList.toggle("dark", next === "dark")
+      return { ...prev, theme: next }
+    })
+  }, [])
+
+  const contextValue = useMemo(() => ({ theme: state.theme, toggleTheme }), [state.theme, toggleTheme])
 
   if (!state.mounted) {
     return <div className="dark">{children}</div>
   }
 
   return (
-    <ThemeContext.Provider value={{ theme: state.theme, toggleTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   )

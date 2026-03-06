@@ -8,12 +8,12 @@ interface StatCardProps {
 
 export function StatCard({ label, value, subtitle, color, icon }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-card-border bg-card-bg p-5 transition-colors hover:bg-card-hover">
+    <div className="glass-card p-5">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-foreground-muted">{label}</p>
+          <p className="label-xs">{label}</p>
           <p
-            className="mt-1 text-2xl font-bold"
+            className="mt-2 metric-lg"
             style={color ? { color } : undefined}
           >
             {value}
@@ -23,7 +23,7 @@ export function StatCard({ label, value, subtitle, color, icon }: StatCardProps)
           )}
         </div>
         {icon && (
-          <div className="text-2xl">{icon}</div>
+          <div className="text-2xl text-foreground-muted">{icon}</div>
         )}
       </div>
     </div>

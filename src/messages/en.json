@@ -1,7 +1,7 @@
 {
   "common": {
-    "appName": "CC KPI Tracker",
-    "companyName": "Elsewedy Electric",
+    "appName": "Cost Control KPI Tracker",
+    "companyName": "Elsewedy Electric PSP",
     "loading": "Loading...",
     "error": "An error occurred",
     "save": "Save",

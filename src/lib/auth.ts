@@ -63,22 +63,44 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials)
-        if (!parsed.success) return null
+        if (!parsed.success) {
+          return null
+        }
 
         const { email, password } = parsed.data
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },
+          select: {
+            id: true,
+            email: true,
+            passwordHash: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            tier: true,
+            companyId: true,
+            departmentId: true,
+            avatarUrl: true,
+            isActive: true,
+            failedLoginAttempts: true,
+            lockedUntil: true,
+          },
         })
 
-        if (!user || !user.isActive) {
-          logger.warn({ email }, "Login attempt for inactive/unknown user")
+        if (!user) {
+          logger.warn({ email }, "Login attempt for unknown user")
           return null
+        }
+
+        if (!user.isActive) {
+          logger.warn({ email }, "Login attempt for disabled user")
+          throw new Error("ACCOUNT_DISABLED")
         }
 
         if (user.lockedUntil && user.lockedUntil > new Date()) {
           logger.warn({ email, lockedUntil: user.lockedUntil }, "Login attempt on locked account")
-          return null
+          throw new Error("ACCOUNT_LOCKED")
         }
 
         const isValid = await bcrypt.compare(password, user.passwordHash)

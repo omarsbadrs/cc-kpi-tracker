@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "CC KPI Tracker — Elsewedy Electric",
+  title: "Cost Control KPI Tracker — Elsewedy Electric PSP",
   description: "Cost Control Department KPI Performance Management System",
 }
 

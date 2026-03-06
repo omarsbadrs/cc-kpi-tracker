@@ -118,6 +118,8 @@ model User {
   manager         User?      @relation("ManagerReports", fields: [managerId], references: [id])
   reports         User[]     @relation("ManagerReports")
   nationality     String?
+  graduationYear  Int?
+  functionProject String?    // e.g., "SG&A - Digitalization and Excellence"
   preferredLocale String     @default("en")  // "en", "ar" (future)
   isActive        Boolean    @default(true)
   failedLoginAttempts Int     @default(0)
@@ -170,6 +172,7 @@ model TeamMember {
   createdAt DateTime @default(now())
 
   @@unique([userId, leaderId])
+  @@index([leaderId])
   @@map("team_members")
 }
 
@@ -183,6 +186,8 @@ model EvalPeriod {
   periodType  String   // "MONTHLY" | "QUARTERLY" | "ANNUAL"
   startDate   DateTime
   endDate     DateTime
+  objectives  String?  // Main objectives for this period
+  focus       String?  // Key focus areas
   isActive    Boolean  @default(true)
   isClosed    Boolean  @default(false)
   isLocked    Boolean  @default(false)  // True while scoring engine is running
@@ -317,6 +322,8 @@ model KpiAssignment {
   actuals         KpiActual[]
 
   @@unique([userId, kpiDefinitionId, evalPeriodId])
+  @@index([userId, evalPeriodId])
+  @@index([evalPeriodId])
   @@map("kpi_assignments")
 }
 
@@ -342,6 +349,8 @@ model KpiActual {
   evidenceFiles   EvidenceFile[]
 
   @@unique([assignmentId, evalPeriodId])
+  @@index([userId, evalPeriodId])
+  @@index([status])
   @@map("kpi_actuals")
 }
 
@@ -379,6 +388,7 @@ model ScoreSnapshot {
   calculatedAt   DateTime      @default(now())
 
   @@unique([userId, evalPeriodId, pillarCode])
+  @@index([evalPeriodId])
   @@map("score_snapshots")
 }
 
@@ -397,6 +407,8 @@ model Notification {
   link      String?  // deep link within app
   createdAt DateTime @default(now())
 
+  @@index([userId, isRead])
+  @@index([createdAt])
   @@map("notifications")
 }
 
@@ -416,5 +428,8 @@ model AuditLog {
   ipAddress  String?
   createdAt  DateTime @default(now())
 
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
   @@map("audit_logs")
 }

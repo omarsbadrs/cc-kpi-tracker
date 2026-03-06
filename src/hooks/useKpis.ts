@@ -21,6 +21,7 @@ export function useMyAssignments(periodId?: string) {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (periodId) params.set("evalPeriodId", periodId)
+      params.set("pageSize", "100")
       const res = await fetch(`/api/kpis/assignments?${params}`)
       if (!res.ok) throw new Error("Failed to fetch assignments")
       const json = await res.json()

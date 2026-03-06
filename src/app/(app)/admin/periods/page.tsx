@@ -38,7 +38,7 @@ const emptyForm: FormData = {
   focus: "",
 }
 
-function toDateInput(dateStr: string) {
+function toDateInput(dateStr: string | undefined | null): string {
   if (!dateStr) return ""
   return new Date(dateStr).toISOString().split("T")[0]
 }

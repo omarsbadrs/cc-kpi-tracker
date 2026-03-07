@@ -31,6 +31,23 @@ export function useMyAssignments(periodId?: string) {
   })
 }
 
+export function useAllAssignments(periodId?: string) {
+  return useQuery({
+    queryKey: queryKeys.kpis.assignments("all", periodId || ""),
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      params.set("userId", "all")
+      if (periodId) params.set("evalPeriodId", periodId)
+      params.set("pageSize", "1000")
+      const res = await fetch(`/api/kpis/assignments?${params}`)
+      if (!res.ok) throw new Error("Failed to fetch all assignments")
+      const json = await res.json()
+      return json.data
+    },
+    enabled: !!periodId,
+  })
+}
+
 export function useMyActuals(periodId?: string) {
   return useQuery({
     queryKey: queryKeys.kpis.actuals("me", periodId || ""),

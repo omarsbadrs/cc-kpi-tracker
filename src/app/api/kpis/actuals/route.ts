@@ -62,6 +62,11 @@ export const GET = withAuth(async (req, { session }) => {
 })
 
 export const POST = withAuth(async (req, { session }) => {
+  // Only admins and managers can submit actuals
+  if (session.user.role === "USER") {
+    return error(403, "FORBIDDEN", "Only admins and managers can submit actual values")
+  }
+
   const body = await req.json()
   const parsed = submitActualSchema.safeParse(body)
   if (!parsed.success) {
@@ -78,18 +83,17 @@ export const POST = withAuth(async (req, { session }) => {
 
   const { assignmentId, evalPeriodId, actualValue, binaryValue } = parsed.data
 
-  // Verify the assignment exists and belongs to the current user
+  // Verify the assignment exists
   const assignment = await prisma.kpiAssignment.findUnique({
     where: { id: assignmentId },
+    include: { user: { select: { managerId: true } } },
   })
   if (!assignment) {
     return error(404, "NOT_FOUND", "Assignment not found")
   }
-  if (
-    assignment.userId !== session.user.id &&
-    session.user.role !== "ADMIN"
-  ) {
-    return error(403, "FORBIDDEN", "You can only submit actuals for your own assignments")
+  // Managers can only submit for users they manage
+  if (session.user.role === "MANAGER" && assignment.user.managerId !== session.user.id) {
+    return error(403, "FORBIDDEN", "You can only submit actuals for users you manage")
   }
 
   // Check period is not locked or closed
@@ -113,7 +117,7 @@ export const POST = withAuth(async (req, { session }) => {
     },
     create: {
       assignmentId,
-      userId: session.user.id,
+      userId: assignment.userId,
       evalPeriodId,
       actualValue: actualValue ?? null,
       binaryValue: binaryValue ?? null,

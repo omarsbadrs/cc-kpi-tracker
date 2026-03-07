@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
@@ -8,20 +8,99 @@ import { Badge } from "@/components/shared/Badge"
 import { Pagination } from "@/components/shared/Pagination"
 import { TIER_LABELS, ROLE_LABELS } from "@/lib/constants"
 import { useRouter } from "next/navigation"
-import { Clock, UserCog, UserPlus, UserMinus, Shield, ChevronDown } from "lucide-react"
+import { Clock, UserCog, UserPlus, UserMinus, Shield, ChevronDown, Filter, X, ArrowUpDown } from "lucide-react"
+
+interface Filters {
+  search: string
+  role: string
+  tier: string
+  isActive: string
+  departmentId: string
+  managerId: string
+  sortBy: string
+  sortOrder: string
+}
+
+const INITIAL_FILTERS: Filters = {
+  search: "",
+  role: "",
+  tier: "",
+  isActive: "",
+  departmentId: "",
+  managerId: "",
+  sortBy: "createdAt",
+  sortOrder: "desc",
+}
+
+const SORT_OPTIONS = [
+  { value: "createdAt", label: "Date Created" },
+  { value: "firstName", label: "First Name" },
+  { value: "lastName", label: "Last Name" },
+  { value: "email", label: "Email" },
+  { value: "role", label: "Role" },
+  { value: "tier", label: "Tier" },
+  { value: "lastLoginAt", label: "Last Login" },
+]
 
 export default function AdminUsersPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState("")
+  const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
+  const [showFilters, setShowFilters] = useState(false)
   const [showCreateForm, setShowCreateForm] = useState(false)
 
+  const updateFilter = useCallback((key: keyof Filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+    setPage(1)
+  }, [])
+
+  const clearFilters = useCallback(() => {
+    setFilters(INITIAL_FILTERS)
+    setPage(1)
+  }, [])
+
+  const activeFilterCount = [filters.role, filters.tier, filters.isActive, filters.departmentId, filters.managerId]
+    .filter(Boolean).length
+
+  // Fetch departments for filter dropdown
+  const { data: deptData } = useQuery({
+    queryKey: ["departments"],
+    queryFn: async () => {
+      const res = await fetch("/api/departments")
+      if (!res.ok) return { data: [] }
+      return res.json()
+    },
+  })
+  const departments: Array<{ id: string; name: string }> = deptData?.data || []
+
+  // Fetch managers for filter dropdown
+  const { data: mgrData } = useQuery({
+    queryKey: ["managers-list"],
+    queryFn: async () => {
+      const res = await fetch("/api/users?role=MANAGER&pageSize=100")
+      if (!res.ok) return { data: [] }
+      const json = await res.json()
+      // Also include admins and team leads who can be managers
+      const res2 = await fetch("/api/users?role=ADMIN&pageSize=100")
+      const json2 = res2.ok ? await res2.json() : { data: [] }
+      return { data: [...(json.data || []), ...(json2.data || [])] }
+    },
+  })
+  const managers: Array<{ id: string; firstName: string; lastName: string }> = mgrData?.data || []
+
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "users", page, search],
+    queryKey: ["admin", "users", page, filters],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), pageSize: "20" })
-      if (search) params.set("search", search)
+      if (filters.search) params.set("search", filters.search)
+      if (filters.role) params.set("role", filters.role)
+      if (filters.tier) params.set("tier", filters.tier)
+      if (filters.isActive) params.set("isActive", filters.isActive)
+      if (filters.departmentId) params.set("departmentId", filters.departmentId)
+      if (filters.managerId) params.set("managerId", filters.managerId)
+      if (filters.sortBy) params.set("sortBy", filters.sortBy)
+      if (filters.sortOrder) params.set("sortOrder", filters.sortOrder)
       const res = await fetch(`/api/users?${params}`)
       if (!res.ok) throw new Error("Failed to fetch users")
       return res.json()
@@ -47,8 +126,6 @@ export default function AdminUsersPage() {
     },
   })
 
-  if (isLoading) return <LoadingSpinner />
-
   const users = data?.data || []
   const meta = data?.meta
 
@@ -56,7 +133,7 @@ export default function AdminUsersPage() {
     <div>
       <PageHeader
         title="User Management"
-        description={`${meta?.total || 0} users total`}
+        description={`${meta?.total ?? "..."} users total`}
         action={
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -67,16 +144,169 @@ export default function AdminUsersPage() {
         }
       />
 
-      {/* Search */}
-      <div className="mb-4">
+      {/* Search + Filter Toggle */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           type="text"
           placeholder="Search by name, email, or employee ID..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          value={filters.search}
+          onChange={(e) => updateFilter("search", e.target.value)}
           className="w-full max-w-md rounded-lg border border-border bg-input px-4 py-2 text-sm text-foreground placeholder-foreground-muted outline-none focus:border-blue-500"
         />
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+            showFilters || activeFilterCount > 0
+              ? "border-blue-500 bg-blue-500/10 text-blue-400"
+              : "border-border text-foreground-muted hover:bg-card-hover"
+          }`}
+        >
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground-muted transition-colors hover:bg-card-hover hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear all
+          </button>
+        )}
       </div>
+
+      {/* Filter Bar */}
+      {showFilters && (
+        <div className="mb-4 rounded-xl border border-card-border bg-card-bg p-4">
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {/* Role */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Role</label>
+              <select
+                value={filters.role}
+                onChange={(e) => updateFilter("role", e.target.value)}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
+              >
+                <option value="">All Roles</option>
+                <option value="ADMIN">Admin</option>
+                <option value="MANAGER">Manager</option>
+                <option value="USER">User</option>
+              </select>
+            </div>
+
+            {/* Tier */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Tier</label>
+              <select
+                value={filters.tier}
+                onChange={(e) => updateFilter("tier", e.target.value)}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
+              >
+                <option value="">All Tiers</option>
+                {Object.entries(TIER_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Status</label>
+              <select
+                value={filters.isActive}
+                onChange={(e) => updateFilter("isActive", e.target.value)}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+            </div>
+
+            {/* Department */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Department</label>
+              <select
+                value={filters.departmentId}
+                onChange={(e) => updateFilter("departmentId", e.target.value)}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
+              >
+                <option value="">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Manager */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Reports To</label>
+              <select
+                value={filters.managerId}
+                onChange={(e) => updateFilter("managerId", e.target.value)}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
+              >
+                <option value="">All Managers</option>
+                {managers.map((m) => (
+                  <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Sort row */}
+          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+            <ArrowUpDown className="h-4 w-4 text-foreground-muted" />
+            <label className="text-xs font-medium text-foreground-muted">Sort by</label>
+            <select
+              value={filters.sortBy}
+              onChange={(e) => updateFilter("sortBy", e.target.value)}
+              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <select
+              value={filters.sortOrder}
+              onChange={(e) => updateFilter("sortOrder", e.target.value)}
+              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Active Filter Tags */}
+      {activeFilterCount > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {filters.role && (
+            <FilterTag label={`Role: ${ROLE_LABELS[filters.role as keyof typeof ROLE_LABELS]}`} onRemove={() => updateFilter("role", "")} />
+          )}
+          {filters.tier && (
+            <FilterTag label={`Tier: ${TIER_LABELS[filters.tier as keyof typeof TIER_LABELS]}`} onRemove={() => updateFilter("tier", "")} />
+          )}
+          {filters.isActive && (
+            <FilterTag label={`Status: ${filters.isActive === "true" ? "Active" : "Inactive"}`} onRemove={() => updateFilter("isActive", "")} />
+          )}
+          {filters.departmentId && (
+            <FilterTag label={`Dept: ${departments.find((d) => d.id === filters.departmentId)?.name || "..."}`} onRemove={() => updateFilter("departmentId", "")} />
+          )}
+          {filters.managerId && (
+            <FilterTag
+              label={`Manager: ${(() => { const m = managers.find((m) => m.id === filters.managerId); return m ? `${m.firstName} ${m.lastName}` : "..." })()}`}
+              onRemove={() => updateFilter("managerId", "")}
+            />
+          )}
+        </div>
+      )}
 
       {/* Create Form */}
       {showCreateForm && (
@@ -88,43 +318,90 @@ export default function AdminUsersPage() {
       )}
 
       {/* Users Table */}
-      <div className="overflow-x-auto rounded-xl border border-card-border bg-card-bg">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border bg-background-secondary">
-              <th className="px-4 py-3 font-medium text-foreground-secondary">Name</th>
-              <th className="px-4 py-3 font-medium text-foreground-secondary">Email</th>
-              <th className="px-4 py-3 font-medium text-foreground-secondary">Role</th>
-              <th className="px-4 py-3 font-medium text-foreground-secondary">Tier</th>
-              <th className="px-4 py-3 font-medium text-foreground-secondary">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user: { id: string; firstName: string; lastName: string; email: string; role: string; tier: string; isActive: boolean }) => (
-              <tr
-                key={user.id}
-                onClick={() => router.push(`/admin/users/${user.id}`)}
-                className="cursor-pointer border-b border-border transition-colors hover:bg-card-hover"
-              >
-                <td className="px-4 py-3 font-medium text-foreground">{user.firstName} {user.lastName}</td>
-                <td className="px-4 py-3 text-foreground-secondary">{user.email}</td>
-                <td className="px-4 py-3"><Badge>{ROLE_LABELS[user.role as keyof typeof ROLE_LABELS]}</Badge></td>
-                <td className="px-4 py-3 text-xs text-foreground-muted">{TIER_LABELS[user.tier as keyof typeof TIER_LABELS]}</td>
-                <td className="px-4 py-3">
-                  <Badge variant={user.isActive ? "success" : "danger"}>
-                    {user.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </td>
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-card-border bg-card-bg">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-border bg-background-secondary">
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Name</th>
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Email</th>
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Role</th>
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Tier</th>
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Department</th>
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Manager</th>
+                <th className="px-4 py-3 font-medium text-foreground-secondary">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {meta && <Pagination page={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />}
-      </div>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-foreground-muted">
+                    No users found matching your filters.
+                  </td>
+                </tr>
+              ) : (
+                users.map((user: UserRow) => (
+                  <tr
+                    key={user.id}
+                    onClick={() => router.push(`/admin/users/${user.id}`)}
+                    className="cursor-pointer border-b border-border transition-colors hover:bg-card-hover"
+                  >
+                    <td className="px-4 py-3 font-medium text-foreground">{user.firstName} {user.lastName}</td>
+                    <td className="px-4 py-3 text-foreground-secondary">{user.email}</td>
+                    <td className="px-4 py-3"><Badge>{ROLE_LABELS[user.role as keyof typeof ROLE_LABELS]}</Badge></td>
+                    <td className="px-4 py-3 text-xs text-foreground-muted">{TIER_LABELS[user.tier as keyof typeof TIER_LABELS]}</td>
+                    <td className="px-4 py-3 text-xs text-foreground-muted">{user.department?.name || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-foreground-muted">
+                      {user.manager ? `${user.manager.firstName} ${user.manager.lastName}` : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={user.isActive ? "success" : "danger"}>
+                        {user.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          {meta && meta.totalPages > 1 && (
+            <Pagination page={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+          )}
+        </div>
+      )}
 
       {/* Global Audit Trail */}
       <GlobalAuditTrail />
     </div>
+  )
+}
+
+// ─────────────────────────────────────
+// Types & Helper Components
+// ─────────────────────────────────────
+
+interface UserRow {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  role: string
+  tier: string
+  isActive: boolean
+  department?: { id: string; name: string } | null
+  manager?: { id: string; firstName: string; lastName: string } | null
+}
+
+function FilterTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400">
+      {label}
+      <button onClick={onRemove} className="rounded-full p-0.5 hover:bg-blue-500/20">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   )
 }
 

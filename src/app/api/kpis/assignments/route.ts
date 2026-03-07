@@ -13,33 +13,52 @@ export const GET = withAuth(async (req, { session }) => {
   const { page, pageSize } = parsePagination(searchParams)
   const userId = searchParams.get("userId") || session.user.id
   const evalPeriodId = searchParams.get("evalPeriodId") || undefined
+  const fetchAll = userId === "all" && (session.user.role === "ADMIN" || session.user.role === "MANAGER")
 
   // Non-admins/managers can only see their own
-  const effectiveUserId =
-    session.user.role === "ADMIN" || session.user.role === "MANAGER"
+  const effectiveUserId = fetchAll
+    ? undefined
+    : (session.user.role === "ADMIN" || session.user.role === "MANAGER")
       ? userId
       : session.user.id
 
   const where: Record<string, unknown> = {
-    userId: effectiveUserId,
     isActive: true,
   }
+  if (effectiveUserId) where.userId = effectiveUserId
   if (evalPeriodId) where.evalPeriodId = evalPeriodId
+  // Exclude admin users from the hub view — admins manage KPIs, not assigned to them
+  if (fetchAll) where.user = { role: { not: "ADMIN" } }
 
-  // Get user tier so we can include the tier-specific target
-  const user = await prisma.user.findUnique({
-    where: { id: effectiveUserId },
-    select: { tier: true },
-  })
+  // For single-user queries, get tier-specific targets
+  let userTier: string | undefined
+  if (effectiveUserId) {
+    const user = await prisma.user.findUnique({
+      where: { id: effectiveUserId },
+      select: { tier: true },
+    })
+    userTier = user?.tier
+  }
+
+  const includeUser = fetchAll
+    ? { select: { id: true, email: true, firstName: true, lastName: true, tier: true, role: true } }
+    : undefined
+
+  const includeTargets = userTier
+    ? { where: { tier: userTier as import("@prisma/client").Tier }, take: 1 }
+    : fetchAll
+      ? true
+      : undefined
 
   const [assignments, total] = await Promise.all([
     prisma.kpiAssignment.findMany({
       where,
       include: {
+        ...(includeUser ? { user: includeUser } : {}),
         kpiDefinition: {
           include: {
             pillar: { select: { code: true, name: true } },
-            targets: user ? { where: { tier: user.tier }, take: 1 } : false,
+            ...(includeTargets ? { targets: includeTargets } : {}),
           },
         },
         evalPeriod: {
@@ -47,7 +66,9 @@ export const GET = withAuth(async (req, { session }) => {
         },
         actuals: { orderBy: { createdAt: "desc" }, take: 1 },
       },
-      orderBy: { kpiDefinition: { sortOrder: "asc" } },
+      orderBy: fetchAll
+        ? [{ user: { lastName: "asc" } }, { kpiDefinition: { sortOrder: "asc" } }]
+        : { kpiDefinition: { sortOrder: "asc" } },
       ...paginateQuery(page, pageSize),
     }),
     prisma.kpiAssignment.count({ where }),

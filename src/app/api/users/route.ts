@@ -12,11 +12,18 @@ export const GET = withAuth(async (req) => {
 
   const role = searchParams.get("role") || undefined
   const tier = searchParams.get("tier") || undefined
+  const isActive = searchParams.get("isActive")
+  const departmentId = searchParams.get("departmentId") || undefined
+  const managerId = searchParams.get("managerId") || undefined
   const search = searchParams.get("search") || undefined
 
   const where: Record<string, unknown> = {}
   if (role) where.role = role
   if (tier) where.tier = tier
+  if (isActive === "true") where.isActive = true
+  else if (isActive === "false") where.isActive = false
+  if (departmentId) where.departmentId = departmentId
+  if (managerId) where.managerId = managerId
   if (search) {
     where.OR = [
       { firstName: { contains: search, mode: "insensitive" } },
@@ -42,8 +49,12 @@ export const GET = withAuth(async (req) => {
         avatarUrl: true,
         departmentId: true,
         managerId: true,
+        nationality: true,
+        functionProject: true,
         lastLoginAt: true,
         createdAt: true,
+        department: { select: { id: true, name: true } },
+        manager: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { [sortBy || "createdAt"]: sortOrder },
       ...paginateQuery(page, pageSize),

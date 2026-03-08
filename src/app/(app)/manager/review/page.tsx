@@ -571,40 +571,34 @@ export default function ReviewQueuePage() {
   const pendingCount = pendingVisible.length
   const totalPending = allRows.filter((r) => r.actuals[0]?.status === "SUBMITTED").length
 
-  // Bulk approve all pending in current view
+  // Bulk approve all pending in current view — single API call
   const handleBulkApprove = async () => {
     if (pendingVisible.length === 0) return
     setIsBulkPending(true)
     try {
-      await Promise.all(
-        pendingVisible.map((r) =>
-          fetch(`/api/kpis/actuals/${r.actuals[0]!.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "APPROVED" }),
-          })
-        )
-      )
+      const ids = pendingVisible.map((r) => r.actuals[0]!.id)
+      await fetch("/api/kpis/actuals/bulk-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status: "APPROVED" }),
+      })
       queryClient.invalidateQueries({ queryKey: ["review-queue"] })
     } finally {
       setIsBulkPending(false)
     }
   }
 
-  // Bulk reject all pending in current view
+  // Bulk reject all pending in current view — single API call
   const handleBulkRejectConfirm = async (comment: string) => {
     if (pendingVisible.length === 0) return
     setIsBulkPending(true)
     try {
-      await Promise.all(
-        pendingVisible.map((r) =>
-          fetch(`/api/kpis/actuals/${r.actuals[0]!.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "REJECTED", reviewComment: comment }),
-          })
-        )
-      )
+      const ids = pendingVisible.map((r) => r.actuals[0]!.id)
+      await fetch("/api/kpis/actuals/bulk-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status: "REJECTED", reviewComment: comment }),
+      })
       queryClient.invalidateQueries({ queryKey: ["review-queue"] })
       setBulkRejectOpen(false)
     } finally {

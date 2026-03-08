@@ -327,6 +327,15 @@ export default function TeamMembersPage() {
     enabled: !isLoading,
   })
 
+  // Build userId → assigned KPI count map (must be before early return)
+  const kpiCountByUser = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const a of assignmentsData?.data ?? []) {
+      map.set(a.userId, (map.get(a.userId) ?? 0) + 1)
+    }
+    return map
+  }, [assignmentsData])
+
   if (isLoading) return <LoadingSpinner />
 
   const allUsers = data?.allUsers || []
@@ -343,15 +352,6 @@ export default function TeamMembersPage() {
 
   // All team members excluding the current manager (for count/analytics)
   const teamMembers = isAdmin ? allUsers : allUsers.filter(u => u.id !== session?.user?.id)
-
-  // Build userId → assigned KPI count map
-  const kpiCountByUser = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const a of assignmentsData?.data ?? []) {
-      map.set(a.userId, (map.get(a.userId) ?? 0) + 1)
-    }
-    return map
-  }, [assignmentsData])
 
   function nodeMatchesSearch(node: TreeNode): boolean {
     if (!search) return true

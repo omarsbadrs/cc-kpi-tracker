@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { usePeriods } from "@/hooks/usePeriods"
 import { useMyScores } from "@/hooks/useScoring"
 import { useMyAssignments } from "@/hooks/useKpis"
@@ -9,6 +10,7 @@ import { OverallScoreCard } from "@/components/dashboard/OverallScoreCard"
 import { PillarCard } from "@/components/dashboard/PillarCard"
 import { PillarKpiDetail } from "@/components/dashboard/PillarKpiDetail"
 import { KpiStatusGrid } from "@/components/dashboard/KpiStatusGrid"
+import { AdminInsightsDashboard } from "@/components/dashboard/AdminInsightsDashboard"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
 import type { PillarCode } from "@/types"
 import type { AppraisalBand } from "@prisma/client"
@@ -38,6 +40,17 @@ interface Assignment {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
+
+  // Admin gets the org-wide insights dashboard — no personal KPIs
+  if (session?.user?.role === "ADMIN") {
+    return <AdminInsightsDashboard />
+  }
+
+  return <UserDashboard />
+}
+
+function UserDashboard() {
   const { data: periods, isLoading: periodsLoading } = usePeriods()
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("")
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useKpiDefinitions } from "@/hooks/useKpis"
 import { usePeriods } from "@/hooks/usePeriods"
@@ -23,6 +23,25 @@ export default function AssignmentsPage() {
     },
   })
 
+  // Fetch existing assignments for the selected period to know who's already assigned
+  const { data: existingAssignments, isLoading: assignmentsLoading } = useQuery({
+    queryKey: ["admin", "assignments", "existing", selectedPeriod],
+    queryFn: async () => {
+      const res = await fetch(`/api/kpis/assignments?userId=all&evalPeriodId=${selectedPeriod}&pageSize=5000`)
+      if (!res.ok) throw new Error("Failed")
+      return (await res.json()).data as { userId: string }[]
+    },
+    enabled: !!selectedPeriod,
+  })
+
+  // Set of userIds that already have at least one assignment this period
+  const alreadyAssignedIds = new Set((existingAssignments ?? []).map((a) => a.userId))
+
+  // Users who have NO assignments yet for this period
+  const unassignedUsers = (users ?? []).filter(
+    (u: { id: string; role: string }) => u.role !== "ADMIN" && !alreadyAssignedIds.has(u.id)
+  )
+
   const bulkAssign = useMutation({
     mutationFn: async (data: { userIds: string[]; kpiDefinitionIds: string[]; evalPeriodId: string }) => {
       const res = await fetch("/api/kpis/assignments", {
@@ -40,6 +59,9 @@ export default function AssignmentsPage() {
 
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
   const [selectedKpis, setSelectedKpis] = useState<string[]>([])
+
+  // Clear user selection when period changes
+  useEffect(() => { setSelectedUsers([]) }, [selectedPeriod])
 
   if (usersLoading) return <LoadingSpinner />
 
@@ -72,33 +94,63 @@ export default function AssignmentsPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             {/* User selection */}
             <div className="rounded-xl border border-card-border bg-card-bg p-6">
-              <h3 className="mb-3 text-sm font-medium text-foreground-muted">Select Users</h3>
-              <div className="max-h-64 space-y-1 overflow-y-auto">
-                {(users || []).map((u: { id: string; firstName: string; lastName: string; tier: string }) => (
-                  <label key={u.id} className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-card-hover">
-                    <input
-                      type="checkbox"
-                      checked={selectedUsers.includes(u.id)}
-                      onChange={(e) => {
-                        setSelectedUsers(
-                          e.target.checked
-                            ? [...selectedUsers, u.id]
-                            : selectedUsers.filter((id) => id !== u.id)
-                        )
-                      }}
-                      className="rounded border-border"
-                    />
-                    <span className="text-foreground">{u.firstName} {u.lastName}</span>
-                    <span className="text-xs text-foreground-muted">({u.tier})</span>
-                  </label>
-                ))}
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-foreground-muted">
+                  Select Users
+                  <span className="ml-2 rounded-full bg-background-secondary px-2 py-0.5 text-xs text-foreground-muted">
+                    {unassignedUsers.length} unassigned
+                  </span>
+                </h3>
+                {alreadyAssignedIds.size > 0 && (
+                  <span className="text-xs text-foreground-muted/60">
+                    {alreadyAssignedIds.size} already assigned
+                  </span>
+                )}
               </div>
-              <button
-                onClick={() => setSelectedUsers(users?.map((u: { id: string }) => u.id) || [])}
-                className="mt-2 text-xs text-blue-500 hover:text-blue-400"
-              >
-                Select all
-              </button>
+              {assignmentsLoading ? (
+                <div className="max-h-64 space-y-2 overflow-hidden py-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                      <div className="h-4 w-4 rounded bg-background-secondary animate-pulse" />
+                      <div className="h-3.5 rounded bg-background-secondary animate-pulse" style={{ width: `${110 + i * 20}px` }} />
+                      <div className="ml-1 h-3 w-14 rounded bg-background-secondary animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : unassignedUsers.length === 0 ? (
+                <p className="py-6 text-center text-sm text-foreground-muted">
+                  All users already have KPIs assigned for this period.
+                </p>
+              ) : (
+                <>
+                  <div className="max-h-64 space-y-1 overflow-y-auto">
+                    {unassignedUsers.map((u: { id: string; firstName: string; lastName: string; tier: string }) => (
+                      <label key={u.id} className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-card-hover">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(u.id)}
+                          onChange={(e) => {
+                            setSelectedUsers(
+                              e.target.checked
+                                ? [...selectedUsers, u.id]
+                                : selectedUsers.filter((id) => id !== u.id)
+                            )
+                          }}
+                          className="rounded border-border"
+                        />
+                        <span className="text-foreground">{u.firstName} {u.lastName}</span>
+                        <span className="text-xs text-foreground-muted">({u.tier})</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setSelectedUsers(unassignedUsers.map((u: { id: string }) => u.id))}
+                    className="mt-2 text-xs text-blue-500 hover:text-blue-400"
+                  >
+                    Select all
+                  </button>
+                </>
+              )}
             </div>
 
             {/* KPI selection */}

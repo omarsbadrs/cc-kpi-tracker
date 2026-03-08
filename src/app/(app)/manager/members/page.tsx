@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useTeamReportPdf } from "@/hooks/useTeamReportPdf"
+import { useActivePeriod } from "@/hooks/usePeriods"
 
 // ─────────────────────────────────────
 // Types
@@ -39,6 +40,11 @@ interface TeamData {
   managers?: (Member & { reports: Member[] })[]
   unassigned?: Member[]
   allUsers?: Member[]
+}
+
+interface Assignment {
+  userId: string
+  actuals: { status: string }[]
 }
 
 interface TreeNode {
@@ -91,16 +97,35 @@ function buildTree(members: Member[]): TreeNode[] {
 // Team Analytics Section
 // ─────────────────────────────────────
 
+const BADGE_STYLES = {
+  blue:  "bg-blue-500/10 text-blue-400",
+  amber: "bg-amber-500/10 text-amber-400",
+  green: "bg-emerald-500/10 text-emerald-400",
+}
+
+function KpiBadge({ value, color }: { value: number | undefined; color: "blue" | "amber" | "green" }) {
+  if (value === undefined) return <span className="text-xs text-foreground-muted/40">—</span>
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${BADGE_STYLES[color]}`}>
+      {value}
+    </span>
+  )
+}
+
 function TeamAnalyticsSection({
   members,
   isAdmin,
   managerName,
-  kpiCountByUser,
+  kpiAssignedByUser,
+  kpiActualsByUser,
+  kpiApprovedByUser,
 }: {
   members: Member[]
   isAdmin: boolean
   managerName: string
-  kpiCountByUser: Map<string, number>
+  kpiAssignedByUser: Map<string, number>
+  kpiActualsByUser: Map<string, number>
+  kpiApprovedByUser: Map<string, number>
 }) {
   const [dirExpanded, setDirExpanded] = useState(true)
   const [sortField, setSortField] = useState<"name" | "tier" | "email">("tier")
@@ -234,7 +259,9 @@ function TeamAnalyticsSection({
                   </th>
                   <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Job Title</th>
                   <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Employee ID</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-right">Assigned KPIs</th>
+                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-center">Assigned KPIs</th>
+                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-center">KPI Actuals</th>
+                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-center">Approved</th>
                 </tr>
               </thead>
               <tbody>
@@ -274,16 +301,14 @@ function TeamAnalyticsSection({
                       <td className="px-4 py-3 font-mono text-xs text-foreground-muted">
                         {m.employeeId ? `#${m.employeeId}` : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        {(() => {
-                          const cnt = kpiCountByUser.get(m.id)
-                          if (cnt === undefined) return <span className="text-xs text-foreground-muted/40">—</span>
-                          return (
-                            <span className="inline-flex items-center justify-center rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-blue-400">
-                              {cnt}
-                            </span>
-                          )
-                        })()}
+                      <td className="px-4 py-3 text-center">
+                        <KpiBadge value={kpiAssignedByUser.get(m.id)} color="blue" />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <KpiBadge value={kpiActualsByUser.get(m.id)} color="amber" />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <KpiBadge value={kpiApprovedByUser.get(m.id)} color="green" />
                       </td>
                     </tr>
                   )
@@ -317,23 +342,35 @@ export default function TeamMembersPage() {
     },
   })
 
-  const { data: assignmentsData } = useQuery<{ data: { userId: string }[] }>({
-    queryKey: ["team", "assignments", "kpi-counts"],
+  const { data: activePeriod } = useActivePeriod()
+
+  const { data: assignmentsData } = useQuery<{ data: Assignment[] }>({
+    queryKey: ["team", "assignments", "kpi-counts", activePeriod?.id],
     queryFn: async () => {
-      const res = await fetch("/api/kpis/assignments?myTeam=true&pageSize=5000")
+      const params = new URLSearchParams({ myTeam: "true", pageSize: "5000" })
+      if (activePeriod?.id) params.set("evalPeriodId", activePeriod.id)
+      const res = await fetch(`/api/kpis/assignments?${params}`)
       if (!res.ok) throw new Error("Failed to fetch assignments")
       return res.json()
     },
     enabled: !isLoading,
   })
 
-  // Build userId → assigned KPI count map (must be before early return)
-  const kpiCountByUser = useMemo(() => {
-    const map = new Map<string, number>()
+  // Build three per-user maps from the same assignments query (must be before early return)
+  const { kpiAssignedByUser, kpiActualsByUser, kpiApprovedByUser } = useMemo(() => {
+    const assigned = new Map<string, number>()
+    const actuals  = new Map<string, number>()
+    const approved = new Map<string, number>()
     for (const a of assignmentsData?.data ?? []) {
-      map.set(a.userId, (map.get(a.userId) ?? 0) + 1)
+      assigned.set(a.userId, (assigned.get(a.userId) ?? 0) + 1)
+      if (a.actuals.length > 0) {
+        actuals.set(a.userId, (actuals.get(a.userId) ?? 0) + 1)
+        if (a.actuals[0]!.status === "APPROVED") {
+          approved.set(a.userId, (approved.get(a.userId) ?? 0) + 1)
+        }
+      }
     }
-    return map
+    return { kpiAssignedByUser: assigned, kpiActualsByUser: actuals, kpiApprovedByUser: approved }
   }, [assignmentsData])
 
   if (isLoading) return <LoadingSpinner />
@@ -406,7 +443,9 @@ export default function TeamMembersPage() {
             members={teamMembers}
             isAdmin={isAdmin}
             managerName={managerName}
-            kpiCountByUser={kpiCountByUser}
+            kpiAssignedByUser={kpiAssignedByUser}
+            kpiActualsByUser={kpiActualsByUser}
+            kpiApprovedByUser={kpiApprovedByUser}
           />
         )}
 

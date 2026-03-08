@@ -19,6 +19,8 @@ import {
   CalendarDays,
   Settings,
   Download,
+  Network,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react"
 
@@ -36,7 +38,9 @@ const navItems: NavItem[] = [
   { label: "Profile", href: "/profile", icon: User, roles: ["USER", "MANAGER", "ADMIN"] },
   { label: "Team Overview", href: "/manager/team", icon: Users, roles: ["MANAGER", "ADMIN"] },
   { label: "Team Members", href: "/manager/members", icon: UsersRound, roles: ["MANAGER", "ADMIN"] },
+  { label: "Review Queue", href: "/manager/review", icon: ClipboardCheck, roles: ["MANAGER", "ADMIN"] },
   { label: "Reports", href: "/manager/reports", icon: FileText, roles: ["MANAGER", "ADMIN"] },
+  { label: "Org Chart", href: "/admin/org-chart", icon: Network, roles: ["ADMIN"] },
   { label: "Users", href: "/admin/users", icon: ShieldCheck, roles: ["ADMIN"] },
   { label: "KPI Library", href: "/admin/kpi-library", icon: Library, roles: ["ADMIN"] },
   { label: "Assignments", href: "/admin/assignments", icon: Target, roles: ["ADMIN"] },

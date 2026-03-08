@@ -13,7 +13,8 @@ export const GET = withAuth(async (req, { session }) => {
   const { page, pageSize } = parsePagination(searchParams)
   const userId = searchParams.get("userId") || session.user.id
   const evalPeriodId = searchParams.get("evalPeriodId") || undefined
-  const fetchAll = userId === "all" && (session.user.role === "ADMIN" || session.user.role === "MANAGER")
+  const myTeam = searchParams.get("myTeam") === "true"
+  const fetchAll = (userId === "all" || myTeam) && (session.user.role === "ADMIN" || session.user.role === "MANAGER")
 
   // Non-admins/managers can only see their own
   const effectiveUserId = fetchAll
@@ -25,7 +26,32 @@ export const GET = withAuth(async (req, { session }) => {
   const where: Record<string, unknown> = {
     isActive: true,
   }
-  if (effectiveUserId) where.userId = effectiveUserId
+
+  // For myTeam on MANAGER: limit to their full descendant hierarchy
+  if (myTeam && session.user.role === "MANAGER") {
+    const everyone = await prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, managerId: true },
+    })
+    const childIndex = new Map<string, string[]>()
+    for (const u of everyone) {
+      if (u.managerId) {
+        const arr = childIndex.get(u.managerId) ?? []
+        arr.push(u.id)
+        childIndex.set(u.managerId, arr)
+      }
+    }
+    function collectDescendants(rootId: string): string[] {
+      const children = childIndex.get(rootId) ?? []
+      const result: string[] = [...children]
+      for (const c of children) result.push(...collectDescendants(c))
+      return result
+    }
+    where.userId = { in: collectDescendants(session.user.id) }
+  } else if (effectiveUserId) {
+    where.userId = effectiveUserId
+  }
+
   if (evalPeriodId) where.evalPeriodId = evalPeriodId
   // Exclude admin users from the hub view — admins manage KPIs, not assigned to them
   if (fetchAll) where.user = { role: { not: "ADMIN" } }
@@ -64,7 +90,11 @@ export const GET = withAuth(async (req, { session }) => {
         evalPeriod: {
           select: { name: true, startDate: true, endDate: true },
         },
-        actuals: { orderBy: { createdAt: "desc" }, take: 1 },
+        actuals: {
+          orderBy: { createdAt: "desc" as const },
+          take: 1,
+          include: { evidenceFiles: true },
+        },
       },
       orderBy: fetchAll
         ? [{ user: { lastName: "asc" } }, { kpiDefinition: { sortOrder: "asc" } }]

@@ -25,6 +25,14 @@ export const TIER_LABELS = {
   SECTION_HEAD: "Head of Department",
 } as const
 
+export const TIER_SHORT: Record<string, string> = {
+  JUNIOR: "Junior",
+  ENGINEER: "Engineer",
+  SENIOR: "Senior",
+  TEAM_LEAD: "Lead",
+  SECTION_HEAD: "Head",
+}
+
 // ─────────────────────────────────────
 // Score Colors (0–5)
 // ─────────────────────────────────────

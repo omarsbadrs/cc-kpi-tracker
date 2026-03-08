@@ -20,9 +20,22 @@ const selectFields = {
   lastLoginAt: true,
 }
 
+/** Recursively collect all descendant user IDs under a given manager */
+function collectDescendantIds(
+  rootId: string,
+  index: Map<string, string[]>  // managerId → [childIds]
+): string[] {
+  const children = index.get(rootId) ?? []
+  const result: string[] = [...children]
+  for (const childId of children) {
+    result.push(...collectDescendantIds(childId, index))
+  }
+  return result
+}
+
 // Returns team hierarchy:
-// - ADMIN: all managers with their reports
-// - MANAGER: only current user's direct reports
+// - ADMIN: full allUsers list for the org chart tree
+// - MANAGER: self + all descendants (recursive) as allUsers
 export const GET = withAuth(async (req, { session }) => {
   const userRole = session.user.role
   const userId = session.user.id
@@ -54,7 +67,6 @@ export const GET = withAuth(async (req, { session }) => {
       orderBy: { firstName: "asc" },
     })
 
-    // All users except the logged-in admin (for edit mode assignment)
     const allUsers = await prisma.user.findMany({
       where: { isActive: true },
       select: selectFields,
@@ -64,14 +76,27 @@ export const GET = withAuth(async (req, { session }) => {
     return success({ managers, unassigned, allUsers })
   }
 
-  // MANAGER: return own direct reports
-  const reports = await prisma.user.findMany({
-    where: { managerId: userId },
+  // MANAGER: fetch all active users, find the manager + all their descendants
+  const everyone = await prisma.user.findMany({
+    where: { isActive: true },
     select: selectFields,
-    orderBy: { firstName: "asc" },
+    orderBy: [{ firstName: "asc" }],
   })
 
-  return success({ reports })
+  // Build managerId → childIds index
+  const childIndex = new Map<string, string[]>()
+  for (const u of everyone) {
+    if (u.managerId) {
+      const arr = childIndex.get(u.managerId) ?? []
+      arr.push(u.id)
+      childIndex.set(u.managerId, arr)
+    }
+  }
+
+  const descendantIds = new Set([userId, ...collectDescendantIds(userId, childIndex)])
+  const allUsers = everyone.filter((u) => descendantIds.has(u.id))
+
+  return success({ allUsers })
 }, "MANAGER")
 
 // Reassign members to a manager (ADMIN only)

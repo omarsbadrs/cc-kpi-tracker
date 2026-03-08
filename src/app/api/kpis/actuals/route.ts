@@ -8,19 +8,52 @@ import { logger } from "@/lib/logger"
 export const GET = withAuth(async (req, { session }) => {
   const { searchParams } = new URL(req.url)
   const { page, pageSize } = parsePagination(searchParams)
-  const userId = searchParams.get("userId") || session.user.id
+  const userId = searchParams.get("userId") || undefined
+  const myTeam = searchParams.get("myTeam") === "true"
   const evalPeriodId = searchParams.get("evalPeriodId") || undefined
   const status = searchParams.get("status") || undefined
   const kpiCode = searchParams.get("kpiCode") || undefined
   const pillarCode = searchParams.get("pillarCode") || undefined
 
-  // Non-admins/managers can only see their own
-  const effectiveUserId =
-    session.user.role === "ADMIN" || session.user.role === "MANAGER"
-      ? userId
-      : session.user.id
+  const where: Record<string, unknown> = {}
 
-  const where: Record<string, unknown> = { userId: effectiveUserId }
+  if (myTeam && (session.user.role === "ADMIN" || session.user.role === "MANAGER")) {
+    // ADMIN: all users; MANAGER: all descendants (recursive)
+    if (session.user.role === "MANAGER") {
+      // Build descendant tree
+      const everyone = await prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, managerId: true },
+      })
+      const childIndex = new Map<string, string[]>()
+      for (const u of everyone) {
+        if (u.managerId) {
+          const arr = childIndex.get(u.managerId) ?? []
+          arr.push(u.id)
+          childIndex.set(u.managerId, arr)
+        }
+      }
+      function collectDescendants(rootId: string): string[] {
+        const children = childIndex.get(rootId) ?? []
+        const result: string[] = [...children]
+        for (const c of children) result.push(...collectDescendants(c))
+        return result
+      }
+      const descendantIds = collectDescendants(session.user.id)
+      where.userId = { in: descendantIds }
+    }
+    // ADMIN with myTeam=true: no userId filter → all users
+  } else if (userId) {
+    // Non-admins/managers can only see their own
+    const effectiveUserId =
+      session.user.role === "ADMIN" || session.user.role === "MANAGER"
+        ? userId
+        : session.user.id
+    where.userId = effectiveUserId
+  } else {
+    where.userId = session.user.id
+  }
+
   if (evalPeriodId) where.evalPeriodId = evalPeriodId
   if (status) where.status = status
 
@@ -43,6 +76,7 @@ export const GET = withAuth(async (req, { session }) => {
     prisma.kpiActual.findMany({
       where,
       include: {
+        user: { select: { id: true, firstName: true, lastName: true, tier: true } },
         assignment: {
           include: {
             kpiDefinition: {
@@ -52,7 +86,7 @@ export const GET = withAuth(async (req, { session }) => {
         },
         evidenceFiles: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { submittedAt: "desc" },
       ...paginateQuery(page, pageSize),
     }),
     prisma.kpiActual.count({ where }),

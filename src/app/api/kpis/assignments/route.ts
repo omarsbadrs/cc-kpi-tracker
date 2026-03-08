@@ -13,6 +13,7 @@ export const GET = withAuth(async (req, { session }) => {
   const { page, pageSize } = parsePagination(searchParams)
   const userId = searchParams.get("userId") || session.user.id
   const evalPeriodId = searchParams.get("evalPeriodId") || undefined
+  const pillarCode = searchParams.get("pillarCode") || undefined
   const myTeam = searchParams.get("myTeam") === "true"
   const fetchAll = (userId === "all" || myTeam) && (session.user.role === "ADMIN" || session.user.role === "MANAGER")
 
@@ -53,8 +54,11 @@ export const GET = withAuth(async (req, { session }) => {
   }
 
   if (evalPeriodId) where.evalPeriodId = evalPeriodId
+  if (pillarCode) where.kpiDefinition = { pillar: { code: pillarCode } }
   // Exclude admin users from the hub view — admins manage KPIs, not assigned to them
-  if (fetchAll) where.user = { role: { not: "ADMIN" } }
+  if (fetchAll) {
+    where.user = { role: { not: "ADMIN" } }
+  }
 
   // For single-user queries, get tier-specific targets
   let userTier: string | undefined

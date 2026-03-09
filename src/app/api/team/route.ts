@@ -62,6 +62,7 @@ export const GET = withAuth(async (req, { session }) => {
       where: {
         managerId: null,
         role: "USER",
+        isActive: true,
       },
       select: selectFields,
       orderBy: { firstName: "asc" },

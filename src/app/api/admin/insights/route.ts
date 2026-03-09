@@ -19,7 +19,7 @@ export const GET = withAuth(async (req, { session }) => {
       role: { not: "ADMIN" },
       ...(tierFilter ? { tier: tierFilter as import("@prisma/client").Tier } : {}),
     },
-    select: { id: true, tier: true, role: true, firstName: true, lastName: true },
+    select: { id: true, tier: true, role: true, firstName: true, lastName: true, createdAt: true, graduationYear: true },
   })
   const userIds = users.map((u) => u.id)
 
@@ -188,6 +188,16 @@ export const GET = withAuth(async (req, { session }) => {
     ? Math.round((overallSnaps.reduce((s, x) => s + (x.overallScore ?? 0), 0) / overallSnaps.length) * 10) / 10
     : 0
 
+  // Average experience: years since graduation year (current year − graduationYear)
+  // Only count users who have a graduationYear set
+  const currentYear = new Date().getFullYear()
+  const usersWithGradYear = users.filter((u) => u.graduationYear != null)
+  const avgExperienceYears = usersWithGradYear.length > 0
+    ? Math.round(
+        (usersWithGradYear.reduce((sum, u) => sum + (currentYear - u.graduationYear!), 0) / usersWithGradYear.length) * 10
+      ) / 10
+    : 0
+
   return success({
     summary: {
       totalStaff: users.length,
@@ -197,6 +207,7 @@ export const GET = withAuth(async (req, { session }) => {
       totalPending,
       avgOverallScore: avgOverall,
       scoredUsers: overallSnaps.length,
+      avgExperienceYears,
     },
     headcountByTier,
     bandDistribution,

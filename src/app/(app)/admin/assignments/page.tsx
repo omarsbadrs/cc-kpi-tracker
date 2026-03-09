@@ -17,7 +17,7 @@ export default function AssignmentsPage() {
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["admin", "users", "all"],
     queryFn: async () => {
-      const res = await fetch("/api/users?pageSize=100")
+      const res = await fetch("/api/users?pageSize=100&isActive=true")
       if (!res.ok) throw new Error("Failed")
       return (await res.json()).data
     },

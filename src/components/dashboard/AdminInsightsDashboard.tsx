@@ -7,9 +7,10 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
-  LineChart, Line, CartesianGrid, Legend,
+  LineChart, Line, CartesianGrid, Legend, LabelList,
+  ComposedChart, Area,
 } from "recharts"
-import { Users, CheckCircle2, Clock, TrendingUp, Award, BarChart2, X, ClipboardList, FileCheck } from "lucide-react"
+import { Users, CheckCircle2, Clock, TrendingUp, Award, BarChart2, X, ClipboardList, FileCheck, GraduationCap } from "lucide-react"
 import { AppraisalBandBadge } from "@/components/dashboard/AppraisalBandBadge"
 import type { AppraisalBand } from "@prisma/client"
 
@@ -150,7 +151,7 @@ export function AdminInsightsDashboard() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-insights-v2", selectedPeriodId, tierFilter, pillarFilter],
+    queryKey: ["admin-insights-v3", selectedPeriodId, tierFilter, pillarFilter],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (selectedPeriodId) params.set("evalPeriodId", selectedPeriodId)
@@ -275,14 +276,15 @@ export function AdminInsightsDashboard() {
       </div>
 
       {/* ── Summary stats ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-7">
-        <StatCard icon={Users}         label="Total Staff"       value={summary?.totalStaff ?? 0}          color="#3b82f6" />
-        <StatCard icon={ClipboardList} label="Assigned KPIs"   value={summary?.totalAssignedKpis ?? 0}   color="#8b5cf6" sub="total assignments" />
-        <StatCard icon={BarChart2}     label="KPI Actuals"      value={summary?.totalActuals ?? 0}         color="#0ea5e9" sub="submitted records" />
-        <StatCard icon={FileCheck}     label="Actuals Approved" value={summary?.totalApproved ?? 0}        color="#22c55e" sub={`${approvalRate}% of actuals`} />
-        <StatCard icon={Clock}         label="Pending Review"   value={summary?.totalPending ?? 0}         color="#f59e0b" />
-        <StatCard icon={TrendingUp}    label="Avg. Score"       value={summary?.avgOverallScore ?? "—"}    color="#06b6d4" sub="out of 100" />
-        <StatCard icon={Award}         label="Scored Users"     value={summary?.scoredUsers ?? 0}          color="#f97316" sub={`of ${summary?.totalStaff ?? 0}`} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-8">
+        <StatCard icon={Users}          label="Total Staff"       value={summary?.totalStaff ?? 0}          color="#3b82f6" />
+        <StatCard icon={GraduationCap}  label="Avg. Experience"   value={summary?.avgExperienceYears != null ? `${summary.avgExperienceYears} yrs` : "—"} color="#8b5cf6" sub="yrs since graduation" />
+        <StatCard icon={ClipboardList}  label="Assigned KPIs"     value={summary?.totalAssignedKpis ?? 0}   color="#06b6d4" sub="total assignments" />
+        <StatCard icon={BarChart2}      label="KPI Actuals"        value={summary?.totalActuals ?? 0}         color="#0ea5e9" sub="submitted records" />
+        <StatCard icon={FileCheck}      label="Actuals Approved"   value={summary?.totalApproved ?? 0}        color="#22c55e" sub={`${approvalRate}% of actuals`} />
+        <StatCard icon={Clock}          label="Pending Review"     value={summary?.totalPending ?? 0}         color="#f59e0b" />
+        <StatCard icon={TrendingUp}     label="Avg. Score"         value={summary?.avgOverallScore ?? "—"}    color="#06b6d4" sub="out of 100" />
+        <StatCard icon={Award}          label="Scored Users"       value={summary?.scoredUsers ?? 0}          color="#f97316" sub={`of ${summary?.totalStaff ?? 0}`} />
       </div>
 
       {/* ── Row 1: Headcount + Band distribution + Submission status ── */}
@@ -301,6 +303,7 @@ export function AdminInsightsDashboard() {
                 {headcountByTier.map((entry: { tier: string }) => (
                   <Cell key={entry.tier} fill={TIER_COLORS[entry.tier] ?? "#64748b"} />
                 ))}
+                <LabelList dataKey="count" position="top" style={{ fill: "#94a3b8", fontSize: 11, fontWeight: 600 }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -358,26 +361,161 @@ export function AdminInsightsDashboard() {
         </ChartCard>
       </div>
 
+      {/* ── Bell curve: Band distribution ── */}
+      {(() => {
+        const BAND_ORDER = ["UNSATISFACTORY", "NEEDS_IMPROVEMENT", "MEETS", "STRONG", "EXCEEDS"] as const
+        const bellData = BAND_ORDER.map((band) => {
+          const entry = rawBandDist.find((d: { band: string }) => d.band === band)
+          return {
+            band,
+            label: BAND_LABELS[band],
+            count: entry?.count ?? 0,
+            color: BAND_COLORS[band],
+          }
+        })
+        const total = bellData.reduce((s, d) => s + d.count, 0)
+        return (
+          <ChartCard title="Performance Bell Curve — Employees by Appraisal Band">
+            <div className="flex items-end gap-6">
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={bellData} margin={{ top: 28, right: 20, left: 0, bottom: 4 }}>
+                  <defs>
+                    {BAND_ORDER.map((band) => (
+                      <linearGradient key={band} id={`bell-${band}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={BAND_COLORS[band]} stopOpacity={0.35} />
+                        <stop offset="95%" stopColor={BAND_COLORS[band]} stopOpacity={0.03} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid stroke="#1e1e2e" strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(v: any, _n: any, p: any) => [
+                      `${v} employee${v !== 1 ? "s" : ""} (${total > 0 ? Math.round((v / total) * 100) : 0}%)`,
+                      p.payload.label,
+                    ]}
+                  />
+                  {/* Smooth area curve */}
+                  <Area type="natural" dataKey="count" stroke="#3b82f6" strokeWidth={2.5}
+                    fill="url(#bell-MEETS)" fillOpacity={1} dot={false} legendType="none" />
+                  {/* Colored bars per band */}
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={52}>
+                    {bellData.map((d) => (
+                      <Cell key={d.band} fill={d.color} fillOpacity={0.75} />
+                    ))}
+                    <LabelList dataKey="count" position="top"
+                      content={({ x, y, width, value, index }) => {
+                        if (value == null || value === 0) return null
+                        const d = bellData[index as number]
+                        if (!d) return null
+                        const pct = total > 0 ? Math.round((Number(value) / total) * 100) : 0
+                        const cx = Number(x) + Number(width) / 2
+                        return (
+                          <g>
+                            <text x={cx} y={Number(y) - 14} textAnchor="middle"
+                              style={{ fill: d.color, fontSize: 13, fontWeight: 700 }}>
+                              {value}
+                            </text>
+                            <text x={cx} y={Number(y) - 2} textAnchor="middle"
+                              style={{ fill: "#64748b", fontSize: 10 }}>
+                              {pct}%
+                            </text>
+                          </g>
+                        )
+                      }}
+                    />
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+
+              {/* Band legend with counts */}
+              <div className="shrink-0 space-y-2 pb-1">
+                {bellData.map((d) => (
+                  <div key={d.band} className="flex items-center gap-2 min-w-[160px]">
+                    <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: d.color }} />
+                    <span className="flex-1 text-xs text-foreground-muted">{d.label}</span>
+                    <span className="font-mono text-sm font-bold" style={{ color: d.color }}>{d.count}</span>
+                    <span className="text-xs text-foreground-muted">
+                      {total > 0 ? `(${Math.round((d.count / total) * 100)}%)` : "(0%)"}
+                    </span>
+                  </div>
+                ))}
+                <div className="mt-2 border-t border-border pt-2 flex justify-between text-xs text-foreground-muted">
+                  <span>Total scored</span>
+                  <span className="font-bold text-foreground">{total}</span>
+                </div>
+              </div>
+            </div>
+          </ChartCard>
+        )
+      })()}
+
       {/* ── Row 2: Pillar radar + Approval by pillar + Score distribution ── */}
       <div className="grid gap-4 lg:grid-cols-3">
 
         {/* Pillar avg scores — radar */}
-        <ChartCard title="Average Score by Pillar">
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={pillarAverages.map((p: { pillarCode: string; avgPercent: number }) => ({
-              ...p, name: PILLAR_NAMES[p.pillarCode] ?? p.pillarCode,
-            }))}>
-              <PolarGrid stroke="#2e2e45" />
-              <PolarAngleAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-              <Radar dataKey="avgPercent" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.25} dot={{ fill: "#3b82f6", r: 3 }} />
-              <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+        {(() => {
+          const radarData = pillarAverages.map((p: { pillarCode: string; avgPercent: number }) => ({
+            ...p,
+            name: PILLAR_NAMES[p.pillarCode] ?? p.pillarCode,
+          }))
+          return (
+            <ChartCard title="Average Score by Pillar">
+              <ResponsiveContainer width="100%" height={320}>
+                <RadarChart data={radarData} margin={{ top: 52, right: 64, bottom: 52, left: 64 }}>
+                  <PolarGrid stroke="#2e2e45" />
+                  <PolarAngleAxis
+                    dataKey="name"
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    tick={(props: any) => {
+                      const { x, y, payload, index } = props
+                      const d = radarData[index as number]
+                      if (!d) return null
+                      const pct = Math.round(d.avgPercent)
+                      const score = (d.avgPercent / 20).toFixed(1)
+                      const color = PILLAR_COLORS[d.pillarCode] ?? "#3b82f6"
+                      // Recharts gives us the exact label anchor point — use "middle" for all
+                      return (
+                        <g>
+                          <text x={x} y={y - 8} textAnchor="middle"
+                            style={{ fill: "#94a3b8", fontSize: 11 }}>
+                            {payload.value}
+                          </text>
+                          <text x={x} y={y + 6} textAnchor="middle"
+                            style={{ fill: "#e2e8f0", fontSize: 13, fontWeight: 700 }}>
+                            {pct}%
+                          </text>
+                          <text x={x} y={y + 20} textAnchor="middle"
+                            style={{ fill: color, fontSize: 11 }}>
+                            {score}/5
+                          </text>
+                        </g>
+                      )
+                    }}
+                  />
+                  <Radar
+                    dataKey="avgPercent"
+                    stroke="#3b82f6"
+                    fill="#3b82f6"
+                    fillOpacity={0.25}
+                    dot={{ fill: "#3b82f6", r: 4 }}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle}
+                    formatter={(v: unknown) => [`${v}% (${(Number(v) / 20).toFixed(1)}/5)`, "Avg Score"]}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          )
+        })()}
 
         {/* Approval rate by pillar — horizontal bar */}
         <ChartCard title="Approval Rate by Pillar">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={approvalByPillar.map((p: { pillarCode: string; name: string; approvalRate: number; approved: number; total: number }) => ({
               ...p, label: PILLAR_NAMES[p.pillarCode] ?? p.pillarCode,
             }))} layout="vertical" barCategoryGap="25%">
@@ -390,6 +528,8 @@ export function AdminInsightsDashboard() {
                 {approvalByPillar.map((entry: { pillarCode: string }) => (
                   <Cell key={entry.pillarCode} fill={PILLAR_COLORS[entry.pillarCode] ?? "#3b82f6"} />
                 ))}
+                <LabelList dataKey="approvalRate" position="right" formatter={(v: unknown) => `${v}%`}
+                  style={{ fill: "#94a3b8", fontSize: 10, fontWeight: 600 }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -397,7 +537,7 @@ export function AdminInsightsDashboard() {
 
         {/* KPI score distribution — bar */}
         <ChartCard title="KPI Score Distribution (0–5)">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={scoreDistribution} barCategoryGap="20%">
               <XAxis dataKey="score" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -406,6 +546,7 @@ export function AdminInsightsDashboard() {
                 {scoreDistribution.map((entry: { score: number }) => (
                   <Cell key={entry.score} fill={SCORE_COLORS[entry.score] ?? "#64748b"} />
                 ))}
+                <LabelList dataKey="count" position="top" style={{ fill: "#94a3b8", fontSize: 11, fontWeight: 600 }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -426,7 +567,11 @@ export function AdminInsightsDashboard() {
                 <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
                 <Line type="monotone" dataKey="avgScore" stroke="#3b82f6" strokeWidth={2.5}
-                  dot={{ fill: "#3b82f6", r: 4 }} activeDot={{ r: 6 }} name="Avg Score" />
+                  dot={{ fill: "#3b82f6", r: 4 }} activeDot={{ r: 6 }} name="Avg Score">
+                  <LabelList dataKey="avgScore" position="top"
+                    formatter={(v: unknown) => `${v}`}
+                    style={{ fill: "#94a3b8", fontSize: 10, fontWeight: 600 }} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           ) : (

@@ -25,7 +25,7 @@ const INITIAL_FILTERS: Filters = {
   search: "",
   role: "",
   tier: "",
-  isActive: "",
+  isActive: "true",
   departmentId: "",
   managerId: "",
   sortBy: "createdAt",

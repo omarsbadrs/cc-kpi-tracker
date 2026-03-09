@@ -134,14 +134,34 @@ function TeamAnalyticsSection({
   // Exclude admins from staff analytics
   const staff = useMemo(() => members.filter(m => m.role !== "ADMIN"), [members])
 
-  // Tier breakdown
+  // KPI totals across all staff
+  const totalAssigned = useMemo(() =>
+    staff.reduce((s, m) => s + (kpiAssignedByUser.get(m.id) ?? 0), 0),
+    [staff, kpiAssignedByUser]
+  )
+  const totalActuals = useMemo(() =>
+    staff.reduce((s, m) => s + (kpiActualsByUser.get(m.id) ?? 0), 0),
+    [staff, kpiActualsByUser]
+  )
+  const totalApproved = useMemo(() =>
+    staff.reduce((s, m) => s + (kpiApprovedByUser.get(m.id) ?? 0), 0),
+    [staff, kpiApprovedByUser]
+  )
+
+  // Tier breakdown with per-tier KPI totals
   const tierBreakdown = useMemo(() => {
-    return TIER_ORDER.map((tier) => ({
-      tier,
-      count: staff.filter(m => m.tier === tier).length,
-      members: staff.filter(m => m.tier === tier),
-    })).filter(t => t.count > 0)
-  }, [staff])
+    return TIER_ORDER.map((tier) => {
+      const tierMembers = staff.filter(m => m.tier === tier)
+      return {
+        tier,
+        count: tierMembers.length,
+        members: tierMembers,
+        assigned: tierMembers.reduce((s, m) => s + (kpiAssignedByUser.get(m.id) ?? 0), 0),
+        actuals:  tierMembers.reduce((s, m) => s + (kpiActualsByUser.get(m.id)  ?? 0), 0),
+        approved: tierMembers.reduce((s, m) => s + (kpiApprovedByUser.get(m.id) ?? 0), 0),
+      }
+    }).filter(t => t.count > 0)
+  }, [staff, kpiAssignedByUser, kpiActualsByUser, kpiApprovedByUser])
 
   // Sorted directory
   const sorted = useMemo(() => {
@@ -171,37 +191,62 @@ function TeamAnalyticsSection({
   return (
     <div className="space-y-4">
       {/* ── Summary banner ── */}
-      <div className="glass-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          {/* Headcount */}
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-foreground-muted">
-              {isAdmin ? "Total Headcount" : "Team Under Your Authority"}
+      <div className="glass-card p-5 space-y-4">
+        {/* Row 1: stat cards */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-border bg-background-secondary/40 px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-foreground-muted">
+              {isAdmin ? "Total Headcount" : "Team Size"}
             </p>
-            <p className="mt-1 text-4xl font-bold tabular-nums text-foreground">{staff.length}</p>
-            {!isAdmin && (
-              <p className="mt-0.5 text-sm text-foreground-muted">{managerName}</p>
-            )}
+            <p className="mt-1 text-3xl font-bold tabular-nums text-foreground">{staff.length}</p>
+            {!isAdmin && <p className="mt-0.5 truncate text-xs text-foreground-muted">{managerName}</p>}
           </div>
+          <div className="rounded-xl border border-blue-500/25 bg-blue-500/8 px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-blue-400/70">Assigned KPIs</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-blue-400">{totalAssigned}</p>
+          </div>
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-amber-400/70">KPI Actuals</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-amber-400">{totalActuals}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">Approved</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-400">{totalApproved}</p>
+          </div>
+        </div>
 
-          {/* Tier breakdown chips */}
-          <div className="flex flex-wrap gap-2">
-            {tierBreakdown.map(({ tier, count }) => {
-              const c = tierColors[tier] ?? defaultColor
-              return (
-                <div
-                  key={tier}
-                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 ${c.bg} ${c.border}`}
-                >
+        {/* Row 2: tier chips */}
+        <div className="flex flex-wrap gap-2">
+          {tierBreakdown.map(({ tier, count, assigned, actuals, approved }) => {
+            const c = tierColors[tier] ?? defaultColor
+            return (
+              <div key={tier} className={`rounded-xl border px-4 py-3 ${c.bg} ${c.border}`}>
+                {/* Tier name + headcount */}
+                <div className="flex items-center gap-2 mb-2">
                   <span className={`h-2 w-2 rounded-full ${c.dot}`} />
-                  <div>
-                    <p className={`text-xs font-semibold ${c.text}`}>{TIER_SHORT[tier] ?? tier}</p>
-                    <p className={`text-xl font-bold tabular-nums leading-tight ${c.text}`}>{count}</p>
+                  <p className={`text-xs font-semibold ${c.text}`}>{TIER_SHORT[tier] ?? tier}</p>
+                  <p className={`text-lg font-bold tabular-nums leading-none ${c.text}`}>{count}</p>
+                </div>
+                {/* KPI stats row */}
+                <div className="flex items-center gap-3">
+                  <div className="text-center">
+                    <p className="text-base font-bold tabular-nums text-blue-400">{assigned}</p>
+                    <p className="text-[10px] text-blue-400/60 leading-tight">Assigned</p>
+                  </div>
+                  <div className="h-6 w-px bg-border/50" />
+                  <div className="text-center">
+                    <p className="text-base font-bold tabular-nums text-amber-400">{actuals}</p>
+                    <p className="text-[10px] text-amber-400/60 leading-tight">Actuals</p>
+                  </div>
+                  <div className="h-6 w-px bg-border/50" />
+                  <div className="text-center">
+                    <p className="text-base font-bold tabular-nums text-emerald-400">{approved}</p>
+                    <p className="text-[10px] text-emerald-400/60 leading-tight">Approved</p>
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -389,6 +434,7 @@ export default function TeamMembersPage() {
 
   // All team members excluding the current manager (for count/analytics)
   const teamMembers = isAdmin ? allUsers : allUsers.filter(u => u.id !== session?.user?.id)
+  const staffCount = teamMembers.filter(u => u.role !== "ADMIN").length
 
   function nodeMatchesSearch(node: TreeNode): boolean {
     if (!search) return true
@@ -403,7 +449,7 @@ export default function TeamMembersPage() {
     <div className="space-y-4">
       <PageHeader
         title={isAdmin ? "Team Directory" : "My Team"}
-        description={isAdmin ? `${allUsers.length} members` : `${teamCount} member${teamCount !== 1 ? "s" : ""} in your hierarchy`}
+        description={isAdmin ? `${staffCount} members` : `${teamCount} member${teamCount !== 1 ? "s" : ""} in your hierarchy`}
         action={
           <div className="flex items-center gap-2">
             <button

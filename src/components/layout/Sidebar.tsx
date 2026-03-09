@@ -21,6 +21,7 @@ import {
   Download,
   Network,
   ClipboardCheck,
+  UserX,
   type LucideIcon,
 } from "lucide-react"
 
@@ -42,11 +43,12 @@ const navItems: NavItem[] = [
   { label: "Reports", href: "/manager/reports", icon: FileText, roles: ["MANAGER", "ADMIN"] },
   { label: "Org Chart", href: "/admin/org-chart", icon: Network, roles: ["ADMIN"] },
   { label: "Users", href: "/admin/users", icon: ShieldCheck, roles: ["ADMIN"] },
-  { label: "KPI Library", href: "/admin/kpi-library", icon: Library, roles: ["ADMIN"] },
+  { label: "KPI Library", href: "/kpi-library", icon: Library, roles: ["USER", "MANAGER", "ADMIN"] },
   { label: "Assignments", href: "/admin/assignments", icon: Target, roles: ["ADMIN"] },
   { label: "Periods", href: "/admin/periods", icon: CalendarDays, roles: ["ADMIN"] },
   { label: "Scoring", href: "/admin/scoring", icon: Settings, roles: ["ADMIN"] },
   { label: "Import", href: "/admin/import", icon: Download, roles: ["ADMIN"] },
+  { label: "Inactive Users", href: "/admin/inactive-users", icon: UserX, roles: ["ADMIN"] },
 ]
 
 export function Sidebar({

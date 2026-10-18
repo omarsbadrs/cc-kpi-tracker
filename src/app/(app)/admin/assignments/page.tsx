@@ -4,12 +4,38 @@ import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useKpiDefinitions } from "@/hooks/useKpis"
 import { usePeriods } from "@/hooks/usePeriods"
-import { PageHeader } from "@/components/shared/PageHeader"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
-import { Badge } from "@/components/shared/Badge"
+import { EmptyState } from "@/components/shared/EmptyState"
+import { PageHead } from "@/components/ui/PageHead"
+import { Field, SelectWrap } from "@/components/ui/Field"
+import { StatusChip, TagPill } from "@/components/ui/StatusChip"
+import { PillarTag } from "@/components/ui/KpiMarks"
+import { useToast } from "@/components/ui/Toast"
+import { PILLARS, PILLAR_CODES, TIER_SHORT } from "@/lib/constants"
+import { UserCheck } from "lucide-react"
+
+interface KpiOption {
+  id: string
+  code: string
+  name: string
+  pillar?: { code: string; name: string } | null
+}
+
+interface UserOption {
+  id: string
+  firstName: string
+  lastName: string
+  tier: string
+  role: string
+}
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`
+}
 
 export default function AssignmentsPage() {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const { data: kpis } = useKpiDefinitions()
   const { data: periods } = usePeriods()
   const [selectedPeriod, setSelectedPeriod] = useState("")
@@ -38,8 +64,8 @@ export default function AssignmentsPage() {
   const alreadyAssignedIds = new Set((existingAssignments ?? []).map((a) => a.userId))
 
   // Users who have NO assignments yet for this period
-  const unassignedUsers = (users ?? []).filter(
-    (u: { id: string; role: string }) => u.role !== "ADMIN" && !alreadyAssignedIds.has(u.id)
+  const unassignedUsers: UserOption[] = (users ?? []).filter(
+    (u: UserOption) => u.role !== "ADMIN" && !alreadyAssignedIds.has(u.id)
   )
 
   const bulkAssign = useMutation({
@@ -65,67 +91,98 @@ export default function AssignmentsPage() {
 
   if (usersLoading) return <LoadingSpinner />
 
-  return (
-    <div>
-      <PageHeader
-        title="KPI Assignments"
-        description="Assign KPIs to users for evaluation periods"
-      />
+  const kpiList: KpiOption[] = kpis || []
+  // Group the KPI checkboxes by pillar; anything without a pillar goes last.
+  const groups = [
+    ...PILLAR_CODES.map((code) => ({
+      code: code as string,
+      name: PILLARS[code].name as string,
+      items: kpiList.filter((k) => k.pillar?.code === code),
+    })),
+    {
+      code: "",
+      name: "Other",
+      items: kpiList.filter((k) => !k.pillar || !(PILLAR_CODES as readonly string[]).includes(k.pillar.code)),
+    },
+  ].filter((g) => g.items.length > 0)
 
-      <div className="space-y-6">
+  const canAssign = selectedUsers.length > 0 && selectedKpis.length > 0
+
+  const assign = () => {
+    if (bulkAssign.isPending || !canAssign) return
+    bulkAssign.mutate(
+      {
+        userIds: selectedUsers,
+        kpiDefinitionIds: selectedKpis,
+        evalPeriodId: selectedPeriod,
+      },
+      {
+        onSuccess: () => toast("Assignments created"),
+        onError: () => toast("Could not assign KPIs. Check your connection", { icon: "alert" }),
+      }
+    )
+  }
+
+  return (
+    <>
+      <PageHead title="KPI assignments" sub="Assign KPIs to people for an evaluation period" />
+
+      <div className="stack">
         {/* Period selector */}
-        <div className="rounded-xl border border-card-border bg-card-bg p-6">
-          <label className="mb-2 block text-sm font-medium text-foreground-secondary">
-            Evaluation Period
-          </label>
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="w-full max-w-md rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
-          >
-            <option value="">Select period...</option>
-            {(periods || []).map((p: { id: string; name: string }) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
+        <section className="card">
+          <div className="field-grid" style={{ maxWidth: 520 }}>
+            <Field label="Evaluation period" htmlFor="assign-period">
+              <SelectWrap>
+                <select
+                  id="assign-period"
+                  className="select"
+                  value={selectedPeriod}
+                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                >
+                  <option value="">Select period…</option>
+                  {(periods || []).map((p: { id: string; name: string }) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </SelectWrap>
+            </Field>
+          </div>
+          {!selectedPeriod && (
+            <p className="side-note">Choose a period to see who still needs KPIs.</p>
+          )}
+        </section>
 
         {selectedPeriod && (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="split even">
             {/* User selection */}
-            <div className="rounded-xl border border-card-border bg-card-bg p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-foreground-muted">
-                  Select Users
-                  <span className="ml-2 rounded-full bg-background-secondary px-2 py-0.5 text-xs text-foreground-muted">
-                    {unassignedUsers.length} unassigned
-                  </span>
-                </h3>
+            <section className="card" style={{ marginBottom: 0 }}>
+              <div className="card-head">
+                <h2 className="card-title flex flex-wrap items-center gap-2">
+                  People
+                  <TagPill>{unassignedUsers.length} unassigned</TagPill>
+                </h2>
                 {alreadyAssignedIds.size > 0 && (
-                  <span className="text-xs text-foreground-muted/60">
-                    {alreadyAssignedIds.size} already assigned
-                  </span>
+                  <span className="side-note">{alreadyAssignedIds.size} already assigned</span>
                 )}
               </div>
               {assignmentsLoading ? (
-                <div className="max-h-64 space-y-2 overflow-hidden py-1">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-                      <div className="h-4 w-4 rounded bg-background-secondary animate-pulse" />
-                      <div className="h-3.5 rounded bg-background-secondary animate-pulse" style={{ width: `${110 + i * 20}px` }} />
-                      <div className="ml-1 h-3 w-14 rounded bg-background-secondary animate-pulse" />
-                    </div>
-                  ))}
-                </div>
+                <LoadingSpinner label="Loading people…" />
               ) : unassignedUsers.length === 0 ? (
-                <p className="py-6 text-center text-sm text-foreground-muted">
-                  All users already have KPIs assigned for this period.
-                </p>
+                <EmptyState
+                  icon={UserCheck}
+                  title="Everyone has KPIs"
+                  description="All people already have KPIs assigned for this period."
+                />
               ) : (
                 <>
-                  <div className="max-h-64 space-y-1 overflow-y-auto">
-                    {unassignedUsers.map((u: { id: string; firstName: string; lastName: string; tier: string }) => (
-                      <label key={u.id} className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-card-hover">
+                  <div
+                    className="flex flex-col gap-2"
+                    role="group"
+                    aria-label="People to assign"
+                    style={{ maxHeight: 288, overflowY: "auto", paddingBlock: 2 }}
+                  >
+                    {unassignedUsers.map((u) => (
+                      <label key={u.id} className="check-row">
                         <input
                           type="checkbox"
                           checked={selectedUsers.includes(u.id)}
@@ -136,82 +193,102 @@ export default function AssignmentsPage() {
                                 : selectedUsers.filter((id) => id !== u.id)
                             )
                           }}
-                          className="rounded border-border"
                         />
-                        <span className="text-foreground">{u.firstName} {u.lastName}</span>
-                        <span className="text-xs text-foreground-muted">({u.tier})</span>
+                        <span>
+                          <span style={{ color: "var(--ink)" }}>{u.firstName} {u.lastName}</span>
+                          <span className="muted"> · {TIER_SHORT[u.tier] ?? u.tier}</span>
+                        </span>
                       </label>
                     ))}
                   </div>
-                  <button
-                    onClick={() => setSelectedUsers(unassignedUsers.map((u: { id: string }) => u.id))}
-                    className="mt-2 text-xs text-blue-500 hover:text-blue-400"
-                  >
-                    Select all
-                  </button>
+                  <div className="row" style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setSelectedUsers(unassignedUsers.map((u) => u.id))}
+                    >
+                      Select all people
+                    </button>
+                  </div>
                 </>
               )}
-            </div>
+            </section>
 
             {/* KPI selection */}
-            <div className="rounded-xl border border-card-border bg-card-bg p-6">
-              <h3 className="mb-3 text-sm font-medium text-foreground-muted">Select KPIs</h3>
-              <div className="max-h-64 space-y-1 overflow-y-auto">
-                {(kpis || []).map((k: { id: string; code: string; name: string }) => (
-                  <label key={k.id} className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-card-hover">
-                    <input
-                      type="checkbox"
-                      checked={selectedKpis.includes(k.id)}
-                      onChange={(e) => {
-                        setSelectedKpis(
-                          e.target.checked
-                            ? [...selectedKpis, k.id]
-                            : selectedKpis.filter((id) => id !== k.id)
-                        )
-                      }}
-                      className="rounded border-border"
-                    />
-                    <span className="font-mono text-xs text-foreground-muted">{k.code}</span>
-                    <span className="text-foreground">{k.name}</span>
-                  </label>
+            <section className="card" style={{ marginBottom: 0 }}>
+              <div className="card-head">
+                <h2 className="card-title flex flex-wrap items-center gap-2">
+                  KPIs
+                  <TagPill>{selectedKpis.length} of {kpiList.length} selected</TagPill>
+                </h2>
+              </div>
+              <div style={{ maxHeight: 288, overflowY: "auto" }}>
+                {groups.map((g, i) => (
+                  <div key={g.code || "other"} role="group" aria-labelledby={`kpi-group-${g.code || "other"}`}>
+                    <h3
+                      id={`kpi-group-${g.code || "other"}`}
+                      className="form-section flex items-center gap-2"
+                      style={i === 0 ? { borderTop: 0, paddingTop: 0 } : undefined}
+                    >
+                      {g.code && <PillarTag code={g.code} />}
+                      <span className="min-w-0">{g.name}</span>
+                    </h3>
+                    <div className="flex flex-col gap-2" style={{ marginBottom: 12 }}>
+                      {g.items.map((k) => (
+                        <label key={k.id} className="check-row">
+                          <input
+                            type="checkbox"
+                            checked={selectedKpis.includes(k.id)}
+                            onChange={(e) => {
+                              setSelectedKpis(
+                                e.target.checked
+                                  ? [...selectedKpis, k.id]
+                                  : selectedKpis.filter((id) => id !== k.id)
+                              )
+                            }}
+                          />
+                          <span>
+                            <span className="kpi-code">{k.code}</span>{" "}
+                            <span style={{ color: "var(--ink)" }}>{k.name}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
-              <button
-                onClick={() => setSelectedKpis(kpis?.map((k: { id: string }) => k.id) || [])}
-                className="mt-2 text-xs text-blue-500 hover:text-blue-400"
-              >
-                Select all
-              </button>
-            </div>
+              <div className="row" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setSelectedKpis(kpiList.map((k) => k.id))}
+                >
+                  Select all KPIs
+                </button>
+              </div>
+            </section>
           </div>
         )}
 
         {/* Assign button */}
         {selectedPeriod && (
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {bulkAssign.isSuccess && <StatusChip tone="ok">Assignments created</StatusChip>}
             <button
-              onClick={() => {
-                if (selectedUsers.length > 0 && selectedKpis.length > 0) {
-                  bulkAssign.mutate({
-                    userIds: selectedUsers,
-                    kpiDefinitionIds: selectedKpis,
-                    evalPeriodId: selectedPeriod,
-                  })
-                }
-              }}
-              disabled={bulkAssign.isPending || selectedUsers.length === 0 || selectedKpis.length === 0}
-              className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              type="button"
+              className="btn btn-primary"
+              onClick={assign}
+              disabled={!canAssign && !bulkAssign.isPending}
+              aria-disabled={bulkAssign.isPending || undefined}
+              title={!canAssign ? "Select at least one person and one KPI" : undefined}
             >
               {bulkAssign.isPending
-                ? "Assigning..."
-                : `Assign ${selectedKpis.length} KPIs to ${selectedUsers.length} users`}
+                ? "Assigning…"
+                : `Assign ${plural(selectedKpis.length, "KPI", "KPIs")} to ${plural(selectedUsers.length, "person", "people")}`}
             </button>
-            {bulkAssign.isSuccess && (
-              <Badge variant="success">Assignments created</Badge>
-            )}
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

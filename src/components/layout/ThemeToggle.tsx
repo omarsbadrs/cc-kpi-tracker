@@ -1,25 +1,22 @@
 "use client"
 
+import { Moon, Sun } from "lucide-react"
 import { useTheme } from "@/components/providers"
 
+/** Icon button that flips light/dark. Profile has the full Light/Dark/System choice. */
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()
+  const next = theme === "dark" ? "light" : "dark"
 
   return (
     <button
+      type="button"
       onClick={toggleTheme}
-      className="ca-topbar-btn"
-      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      className="icon-btn"
+      aria-label={`Switch to ${next} theme`}
+      title={`Switch to ${next} theme`}
     >
-      {theme === "dark" ? (
-        <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ) : (
-        <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-        </svg>
-      )}
+      {theme === "dark" ? <Sun size={17} strokeWidth={1.7} aria-hidden="true" /> : <Moon size={17} strokeWidth={1.7} aria-hidden="true" />}
     </button>
   )
 }

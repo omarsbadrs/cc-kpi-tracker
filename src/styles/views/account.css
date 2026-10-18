@@ -1,0 +1,164 @@
+/* Account screens: sign-in, password reset, error pages, notifications and
+   the profile. Everything else on them is the system's own classes; these
+   are the few pieces it never needed. Tokens only. */
+
+@layer components {
+  /* The theme toggle on the screens outside the app shell: the card's own
+     top-end corner, above the centred wordmark. */
+  .auth-card {
+    position: relative;
+  }
+
+  .auth-corner {
+    position: absolute;
+    top: 14px;
+    inset-inline-end: 14px;
+  }
+
+  .auth-card .auth-brand .brand-logo {
+    height: 34px;
+  }
+
+  .auth-card .auth-title {
+    line-height: 1.2;
+  }
+
+  .auth-card .auth-sub {
+    margin: 6px 0 22px;
+  }
+
+  /* A link-sized row under the fields: "Remember me" and the way out. */
+  .auth-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 2px 0 18px;
+  }
+
+  /* The sign-in button is the screen's one action, so it takes the touch
+     height everywhere, not only under a coarse pointer. */
+  .btn.auth-submit {
+    min-height: 44px;
+  }
+
+  .auth-card .auth-note {
+    text-align: center;
+  }
+
+  .auth-card .sample-banner {
+    margin-bottom: 18px;
+  }
+
+  .banner-title {
+    display: block;
+    font-weight: 600;
+  }
+
+  /* An error or 404 page has no page head, so the empty state carries the
+     one h1 at the empty state's own heading size. */
+  .empty h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .card.status-card {
+    width: 100%;
+    max-width: 440px;
+    padding: 0;
+  }
+
+  /* Password rules under a new-password field. Each rule carries an icon
+     (a tick or an open circle) as well as a tone, so "met" is never colour
+     alone. */
+  .rule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+
+  .rule-list li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .rule-list li svg {
+    flex: none;
+  }
+
+  .rule-list li.met {
+    color: var(--ok);
+  }
+
+  .field-error {
+    font-size: 13px;
+    color: var(--bad);
+  }
+
+  /* A password box with a show/hide icon button inside its end edge. */
+  .input-reveal {
+    position: relative;
+  }
+
+  .input-reveal .input {
+    padding-inline-end: 42px;
+  }
+
+  .input-reveal .icon-btn {
+    position: absolute;
+    top: 50%;
+    inset-inline-end: 2px;
+    transform: translateY(-50%);
+  }
+
+  /* Notifications: the document-row skeleton. A notification carries a
+     sentence, so its sub takes two lines before it ellipsises. */
+  .doc-row.notif-row {
+    align-items: flex-start;
+  }
+
+  .notif-row .doc-row-title {
+    font-weight: 450;
+    color: var(--ink-2);
+  }
+
+  .notif-row.unread .doc-row-title {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .notif-row .doc-row-sub {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .notif-row .doc-row-end {
+    gap: 5px;
+  }
+
+  .notif-time {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+
+  /* Rows that are not links keep the rule but drop the hover fill. */
+  .doc-row.is-static {
+    cursor: default;
+  }
+
+  .doc-row.is-static:hover {
+    background: transparent;
+  }
+}

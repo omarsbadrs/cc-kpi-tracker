@@ -1,175 +1,209 @@
 "use client"
 
-import { useState } from "react"
-import { APPRAISAL_BANDS } from "@/lib/constants"
-import {
-  ChevronDown,
-  ChevronRight,
-  Info,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-} from "lucide-react"
+import { useId, useState, type ReactNode } from "react"
+import { APPRAISAL_BANDS, PILLARS, PILLAR_CODES } from "@/lib/constants"
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleDot, Info, type LucideIcon } from "lucide-react"
 import type { AppraisalBand } from "@prisma/client"
+import { ScoreBadge, PillarTag } from "@/components/ui/KpiMarks"
+import { BandChip } from "@/components/ui/StatusChip"
+
+const HIGHER_ROWS: [string, number][] = [
+  ["≤ 0 (at or above target)", 5],
+  ["1–3 pp below", 4],
+  ["4–6 pp below", 3],
+  ["7–10 pp below", 2],
+  ["11–15 pp below", 1],
+  ["> 15 pp below", 0],
+]
+
+const LOWER_ROWS: [string, number][] = [
+  ["≤ 0 (at or below target)", 5],
+  ["1–3 pp above", 4],
+  ["4–6 pp above", 3],
+  ["7–10 pp above", 2],
+  ["11–15 pp above", 1],
+  ["> 15 pp above", 0],
+]
+
+const BINARY_ROWS: [string, number][] = [
+  ["Pass", 5],
+  ["Fail", 0],
+]
+
+const ALPHA_ROWS: Record<string, [string, string, string, string]> = {
+  A: ["0.45", "0.55", "0.49", "0.51"],
+  B: ["0.40", "0.60", "0.45", "0.55"],
+  C: ["0.45", "0.55", "0.49", "0.51"],
+  D: ["0.35", "0.65", "0.40", "0.60"],
+  E: ["0.10", "0.90", "0.05", "0.95"],
+  F: ["0.40", "0.60", "0.45", "0.55"],
+}
+
+const PILLAR_WEIGHT_ROWS: Record<string, [string, string, string, string]> = {
+  A: ["30%", "26%", "20%", "13%"],
+  B: ["25%", "23%", "20%", "17%"],
+  C: ["20%", "19%", "16%", "13%"],
+  D: ["10%", "14%", "17%", "19%"],
+  E: ["10%", "9%", "5%", "3%"],
+  F: ["5%", "10%", "22%", "36%"],
+}
+
+const BAND_RANGE: Record<AppraisalBand, string> = {
+  EXCEEDS: "90–100",
+  STRONG: "80–89",
+  MEETS: "70–79",
+  NEEDS_IMPROVEMENT: "60–69",
+  UNSATISFACTORY: "< 60",
+}
+
+function Formula({ children }: { children: ReactNode }) {
+  return (
+    <div className="card-list" style={{ padding: "10px 14px", background: "var(--band)" }}>
+      <code className="kpi-code" style={{ display: "block", whiteSpace: "normal", overflowWrap: "anywhere", lineHeight: 1.7 }}>
+        {children}
+      </code>
+    </div>
+  )
+}
+
+function ScoreBandTable({
+  icon: Icon,
+  title,
+  gap,
+  rows,
+}: {
+  icon: LucideIcon
+  title: string
+  gap?: string
+  rows: [string, number][]
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="row" style={{ gap: 6, marginBottom: 6, fontWeight: 600, fontSize: 13.5 }}>
+        <Icon size={15} strokeWidth={1.8} className="muted" style={{ flex: "none" }} aria-hidden="true" />
+        {title}
+      </div>
+      {gap && <p className="side-note" style={{ marginBottom: 6 }}>gap = <span className="kpi-code">{gap}</span></p>}
+      <div className="card-list">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th scope="col">{gap ? "Gap" : "Result"}</th>
+              <th scope="col" className="num">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([cond, score]) => (
+              <tr key={cond}>
+                <td className="ink-2">{cond}</td>
+                <td className="num"><ScoreBadge score={score} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function PillarCell({ code }: { code: string }) {
+  return (
+    <th scope="row" style={{ fontWeight: 450 }}>
+      <span className="row" style={{ gap: 8 }}>
+        <PillarTag code={code} />
+        <span className="nowrap">{PILLARS[code as keyof typeof PILLARS].name}</span>
+      </span>
+    </th>
+  )
+}
 
 export function ScoringMethodologyPanel({ collapsible = true }: { collapsible?: boolean }) {
   const [open, setOpen] = useState(false)
   const isOpen = !collapsible || open
+  const bodyId = useId()
+
+  const title = (
+    <>
+      <Info size={17} strokeWidth={1.6} className="muted" style={{ flex: "none" }} aria-hidden="true" />
+      <span className="card-title grow" style={{ marginBottom: 0 }}>How scoring works</span>
+    </>
+  )
 
   return (
-    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5">
+    <section className="card list-card">
       {collapsible ? (
         <button
+          type="button"
+          className="doc-row"
+          aria-expanded={open}
+          aria-controls={bodyId}
           onClick={() => setOpen(!open)}
-          className="flex w-full items-center gap-2 px-5 py-3.5 text-left"
         >
-          <Info className="h-4 w-4 shrink-0 text-blue-400" strokeWidth={1.5} />
-          <span className="text-sm font-medium text-blue-300">
-            Scoring Methodology — How calculations work
-          </span>
-          {open
-            ? <ChevronDown className="ml-auto h-4 w-4 text-blue-400" />
-            : <ChevronRight className="ml-auto h-4 w-4 text-blue-400" />}
+          {title}
+          {open ? (
+            <ChevronDown size={17} className="muted" style={{ flex: "none" }} aria-hidden="true" />
+          ) : (
+            <ChevronRight size={17} className="muted" style={{ flex: "none" }} aria-hidden="true" />
+          )}
         </button>
       ) : (
-        <div className="flex items-center gap-2 px-5 py-3.5">
-          <Info className="h-4 w-4 shrink-0 text-blue-400" strokeWidth={1.5} />
-          <span className="text-sm font-medium text-blue-300">
-            Scoring Methodology — How calculations work
-          </span>
+        <div className="card-head" style={{ justifyContent: "flex-start", gap: 12 }}>
+          {title}
         </div>
       )}
 
       {isOpen && (
-        <div className="border-t border-blue-500/20 px-5 py-4 space-y-5 text-sm">
-
+        <div
+          id={bodyId}
+          style={{ padding: "4px 16px 16px", borderTop: collapsible ? "1px solid var(--hairline)" : undefined }}
+        >
           {/* Step 1 */}
-          <div>
-            <p className="font-semibold text-foreground-secondary mb-2">
-              Step 1 — Individual KPI Score (0–5)
-            </p>
-            <p className="text-foreground-muted mb-2">
-              Each KPI is scored based on the gap between the actual value and the tier target:
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-border bg-card-bg p-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-                  <span className="text-xs font-semibold text-emerald-400">HIGHER is better</span>
-                </div>
-                <p className="text-xs text-foreground-muted mb-1">gap = Target − Actual</p>
-                <table className="w-full text-xs">
-                  <tbody>
-                    {[
-                      ["≤ 0 (at/above target)", "5"],
-                      ["1–3 pp below", "4"],
-                      ["4–6 pp below", "3"],
-                      ["7–10 pp below", "2"],
-                      ["11–15 pp below", "1"],
-                      ["> 15 pp below", "0"],
-                    ].map(([cond, sc]) => (
-                      <tr key={cond}>
-                        <td className="py-0.5 text-foreground-muted">{cond}</td>
-                        <td className="py-0.5 text-right font-bold text-foreground">{sc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="rounded-lg border border-border bg-card-bg p-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <TrendingDown className="h-3.5 w-3.5 text-red-400" />
-                  <span className="text-xs font-semibold text-red-400">LOWER is better</span>
-                </div>
-                <p className="text-xs text-foreground-muted mb-1">gap = Actual − Target</p>
-                <table className="w-full text-xs">
-                  <tbody>
-                    {[
-                      ["≤ 0 (at/below target)", "5"],
-                      ["1–3 pp above", "4"],
-                      ["4–6 pp above", "3"],
-                      ["7–10 pp above", "2"],
-                      ["11–15 pp above", "1"],
-                      ["> 15 pp above", "0"],
-                    ].map(([cond, sc]) => (
-                      <tr key={cond}>
-                        <td className="py-0.5 text-foreground-muted">{cond}</td>
-                        <td className="py-0.5 text-right font-bold text-foreground">{sc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="rounded-lg border border-border bg-card-bg p-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Minus className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="text-xs font-semibold text-amber-400">BINARY</span>
-                </div>
-                <table className="w-full text-xs mt-2">
-                  <tbody>
-                    <tr>
-                      <td className="py-0.5 text-foreground-muted">Pass</td>
-                      <td className="py-0.5 text-right font-bold text-foreground">5</td>
-                    </tr>
-                    <tr>
-                      <td className="py-0.5 text-foreground-muted">Fail</td>
-                      <td className="py-0.5 text-right font-bold text-foreground">0</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <h3 className="form-section" style={{ borderTop: 0 }}>Step 1 · Individual KPI score (0–5)</h3>
+          <p className="side-note" style={{ marginBottom: 12 }}>
+            Each KPI is scored on the gap between the actual value and the tier target.
+          </p>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <ScoreBandTable icon={ArrowUp} title="Higher is better" gap="Target − Actual" rows={HIGHER_ROWS} />
+            <ScoreBandTable icon={ArrowDown} title="Lower is better" gap="Actual − Target" rows={LOWER_ROWS} />
+            <ScoreBandTable icon={CircleDot} title="Pass or fail" rows={BINARY_ROWS} />
           </div>
 
           {/* Step 2 */}
-          <div>
-            <p className="font-semibold text-foreground-secondary mb-1">Step 2 — Pillar Score</p>
-            <div className="rounded-lg border border-border bg-card-bg p-3 font-mono text-xs text-foreground-muted space-y-1">
-              <p>Pillar Score (out of 5) = Σ ( KPI_Score × Sub_KPI_Weight / 100 )</p>
-              <p>Pillar % = Pillar Score × 20</p>
-            </div>
-            <p className="mt-1.5 text-xs text-foreground-muted">
-              Sub-KPI weights within each pillar sum to 100 per tier.
-              KPIs with weight = 0 for a tier do not contribute.
-            </p>
-          </div>
+          <h3 className="form-section" style={{ marginTop: 18 }}>Step 2 · Pillar score</h3>
+          <Formula>
+            Pillar score (out of 5) = Σ ( KPI_Score × Sub_KPI_Weight / 100 )
+            <br />
+            Pillar % = Pillar score × 20
+          </Formula>
+          <p className="side-note" style={{ marginTop: 8 }}>
+            Sub-KPI weights within each pillar sum to 100 per tier. KPIs with a weight of 0 for a tier do not
+            contribute.
+          </p>
 
           {/* Step 3 */}
-          <div>
-            <p className="font-semibold text-foreground-secondary mb-1">
-              Step 3 — Manager Alpha Blending (Team Lead & Section Head only)
-            </p>
-            <div className="rounded-lg border border-border bg-card-bg p-3 font-mono text-xs text-foreground-muted">
-              <p>Manager Pillar % = α × Team_Pillar_% + (1 − α) × Personal_Pillar_%</p>
-            </div>
-            <div className="mt-2 overflow-x-auto">
-              <table className="text-xs">
+          <h3 className="form-section" style={{ marginTop: 18 }}>
+            Step 3 · Manager alpha blending (team lead and section head only)
+          </h3>
+          <Formula>Manager pillar % = α × Team_Pillar_% + (1 − α) × Personal_Pillar_%</Formula>
+          <div className="card-list" style={{ marginTop: 10 }}>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Alpha values by pillar">
+              <table className="data-table">
                 <thead>
-                  <tr className="text-foreground-muted">
-                    <th className="pr-4 pb-1 text-left font-medium">Pillar</th>
-                    <th className="pr-4 pb-1 font-medium">TL α</th>
-                    <th className="pr-4 pb-1 font-medium">TL personal</th>
-                    <th className="pr-4 pb-1 font-medium">SH α</th>
-                    <th className="pb-1 font-medium">SH personal</th>
+                  <tr>
+                    <th scope="col">Pillar</th>
+                    <th scope="col" className="num">TL α</th>
+                    <th scope="col" className="num">TL personal</th>
+                    <th scope="col" className="num">SH α</th>
+                    <th scope="col" className="num">SH personal</th>
                   </tr>
                 </thead>
-                <tbody className="text-foreground-muted">
-                  {[
-                    ["A", "0.45", "0.55", "0.49", "0.51"],
-                    ["B", "0.40", "0.60", "0.45", "0.55"],
-                    ["C", "0.45", "0.55", "0.49", "0.51"],
-                    ["D", "0.35", "0.65", "0.40", "0.60"],
-                    ["E", "0.10", "0.90", "0.05", "0.95"],
-                    ["F", "0.40", "0.60", "0.45", "0.55"],
-                  ].map(([p, ta, tp, sa, sp]) => (
-                    <tr key={p}>
-                      <td className="pr-4 py-0.5 font-medium text-foreground">{p}</td>
-                      <td className="pr-4 py-0.5 text-center">{ta}</td>
-                      <td className="pr-4 py-0.5 text-center">{tp}</td>
-                      <td className="pr-4 py-0.5 text-center">{sa}</td>
-                      <td className="py-0.5 text-center">{sp}</td>
+                <tbody>
+                  {PILLAR_CODES.map((code) => (
+                    <tr key={code}>
+                      <PillarCell code={code} />
+                      {ALPHA_ROWS[code]?.map((v, i) => (
+                        <td key={i} className="num">{v}</td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
@@ -178,35 +212,26 @@ export function ScoringMethodologyPanel({ collapsible = true }: { collapsible?: 
           </div>
 
           {/* Step 4 */}
-          <div>
-            <p className="font-semibold text-foreground-secondary mb-1">Step 4 — Overall Score</p>
-            <div className="rounded-lg border border-border bg-card-bg p-3 font-mono text-xs text-foreground-muted">
-              <p>Overall Score = Σ ( Pillar_% × Pillar_Weight / 100 )</p>
-            </div>
-            <div className="mt-2 overflow-x-auto">
-              <table className="text-xs">
+          <h3 className="form-section" style={{ marginTop: 18 }}>Step 4 · Overall score</h3>
+          <Formula>Overall score = Σ ( Pillar_% × Pillar_Weight / 100 )</Formula>
+          <div className="card-list" style={{ marginTop: 10 }}>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Pillar weights by tier">
+              <table className="data-table">
                 <thead>
-                  <tr className="text-foreground-muted">
-                    <th className="pr-4 pb-1 text-left font-medium">Pillar</th>
-                    <th className="pr-4 pb-1 font-medium">Junior / Engineer</th>
-                    <th className="pr-4 pb-1 font-medium">Senior</th>
-                    <th className="pr-4 pb-1 font-medium">Team Lead</th>
-                    <th className="pb-1 font-medium">Section Head</th>
+                  <tr>
+                    <th scope="col">Pillar</th>
+                    <th scope="col" className="num">Junior / engineer</th>
+                    <th scope="col" className="num">Senior</th>
+                    <th scope="col" className="num">Team lead</th>
+                    <th scope="col" className="num">Section head</th>
                   </tr>
                 </thead>
-                <tbody className="text-foreground-muted">
-                  {[
-                    ["A — Delivery", "30%", "26%", "20%", "13%"],
-                    ["B — Data Gov.", "25%", "23%", "20%", "17%"],
-                    ["C — Forecasting", "20%", "19%", "16%", "13%"],
-                    ["D — Communication", "10%", "14%", "17%", "19%"],
-                    ["E — Attendance", "10%", "9%", "5%", "3%"],
-                    ["F — Growth", "5%", "10%", "22%", "36%"],
-                  ].map(([pillar, ...ws]) => (
-                    <tr key={pillar}>
-                      <td className="pr-4 py-0.5 font-medium text-foreground">{pillar}</td>
-                      {ws.map((w, i) => (
-                        <td key={i} className="pr-4 py-0.5 text-center">{w}</td>
+                <tbody>
+                  {PILLAR_CODES.map((code) => (
+                    <tr key={code}>
+                      <PillarCell code={code} />
+                      {PILLAR_WEIGHT_ROWS[code]?.map((w, i) => (
+                        <td key={i} className="num">{w}</td>
                       ))}
                     </tr>
                   ))}
@@ -216,37 +241,27 @@ export function ScoringMethodologyPanel({ collapsible = true }: { collapsible?: 
           </div>
 
           {/* Step 5 */}
-          <div>
-            <p className="font-semibold text-foreground-secondary mb-1">Step 5 — Appraisal Band</p>
-            <div className="flex flex-wrap gap-2">
-              {(
-                Object.entries(APPRAISAL_BANDS) as [
-                  AppraisalBand,
-                  { label: string; color: string },
-                ][]
-              ).map(([band, info]) => (
-                <span
-                  key={band}
-                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                  style={{ backgroundColor: info.color + "20", color: info.color }}
-                >
-                  {band === "EXCEEDS"
-                    ? "90–100"
-                    : band === "STRONG"
-                      ? "80–89"
-                      : band === "MEETS"
-                        ? "70–79"
-                        : band === "NEEDS_IMPROVEMENT"
-                          ? "60–69"
-                          : "< 60"}{" "}
-                  → {info.label}
-                </span>
-              ))}
-            </div>
+          <h3 className="form-section" style={{ marginTop: 18 }}>Step 5 · Appraisal band</h3>
+          <div className="card-list" style={{ maxWidth: 420 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Overall score</th>
+                  <th scope="col">Band</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(Object.keys(APPRAISAL_BANDS) as AppraisalBand[]).map((band) => (
+                  <tr key={band}>
+                    <td className="tabular">{BAND_RANGE[band]}</td>
+                    <td><BandChip band={band} small /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
         </div>
       )}
-    </div>
+    </section>
   )
 }

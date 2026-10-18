@@ -1,15 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" fill="none">
-  <!-- ELSEWEDY text -->
-  <text x="10" y="45" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="38" fill="#1a1d26" letter-spacing="3">ELSEWEDY</text>
-  <!-- Double line -->
-  <line x1="10" y1="52" x2="270" y2="52" stroke="#1a1d26" stroke-width="2.5"/>
-  <line x1="10" y1="55" x2="270" y2="55" stroke="#1a1d26" stroke-width="2.5"/>
-  <!-- ELECTRIC text -->
-  <text x="10" y="90" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="38" fill="#1a1d26" letter-spacing="3">ELECTRIC</text>
-  <!-- Red swoosh/smile -->
-  <path d="M 40 100 Q 150 118 260 100" stroke="#DC2626" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <!-- Dark divider -->
-  <line x1="290" y1="15" x2="290" y2="105" stroke="#4b5563" stroke-width="2"/>
-  <!-- PSP in red -->
-  <text x="310" y="80" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="52" fill="#DC2626" letter-spacing="2">PSP</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 235" fill="none" role="img" aria-label="Elsewedy Electric PSP">
+  <!-- Wordmark: wide, light geometric caps. textLength pins each line to the
+       same width whatever system font draws it. -->
+  <g fill="#1d1d1b" font-family="Bahnschrift, Eurostile, Microgramma, 'Segoe UI', Arial, sans-serif" font-weight="400" font-size="84">
+    <text x="5" y="65" textLength="515" lengthAdjust="spacingAndGlyphs">ELSEWEDY</text>
+    <text x="5" y="162" textLength="515" lengthAdjust="spacingAndGlyphs">ELECTRIC</text>
+  </g>
+  <!-- Rule between the two lines -->
+  <rect x="5" y="80" width="515" height="6" fill="#1d1d1b"/>
+  <!-- Red crescent under the wordmark -->
+  <path d="M90 188 Q262 250 435 188 Q262 224 90 188 Z" fill="#ca2a30"/>
+  <!-- Divider -->
+  <rect x="593" y="10" width="5" height="155" fill="#8a8a8a"/>
+  <!-- PSP -->
+  <text x="653" y="110" textLength="177" lengthAdjust="spacingAndGlyphs" fill="#ca2a30" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="82">PSP</text>
 </svg>

@@ -1,14 +1,24 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useActivePeriod, usePeriods } from "@/hooks/usePeriods"
-import { PageHeader } from "@/components/shared/PageHeader"
+import { PageHead } from "@/components/ui/PageHead"
+import { StatGrid, StatTile } from "@/components/ui/StatGrid"
+import { ChipRow } from "@/components/ui/Segmented"
+import { SelectWrap } from "@/components/ui/Field"
+import { StatusChip, ActualStatusChip } from "@/components/ui/StatusChip"
+import { ScoreBadge, PillarTag } from "@/components/ui/KpiMarks"
+import { Modal } from "@/components/ui/Modal"
+import { useToast } from "@/components/ui/Toast"
+import { UserAvatar } from "@/components/layout/UserMenu"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
+import { EmptyState } from "@/components/shared/EmptyState"
 import { TIER_SHORT, PILLARS } from "@/lib/constants"
-import { CheckCircle2, XCircle, FileText, Clock, ChevronDown, ChevronUp } from "lucide-react"
+import { Check, ChevronDown, ClipboardCheck, FileText, Paperclip, X } from "lucide-react"
 import type { PillarCode } from "@/types"
+import "@/styles/views/manager-review.css"
 
 // ─────────────────────────────────────
 // Types
@@ -72,6 +82,10 @@ function getActualStatus(row: AssignmentRow): string {
   return row.actuals[0]?.status ?? "DRAFT"
 }
 
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`
+}
+
 function formatValue(row: AssignmentRow): string {
   const actual = row.actuals[0]
   if (!actual) return "—"
@@ -113,75 +127,88 @@ function formatDate(iso: string | null): string {
   })
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { cls: string; label: string }> = {
-    SUBMITTED: { cls: "bg-amber-500/10 text-amber-400 border border-amber-500/20", label: "Pending" },
-    APPROVED:  { cls: "bg-green-500/10 text-green-400 border border-green-500/20",  label: "Approved" },
-    REJECTED:  { cls: "bg-red-500/10 text-red-400 border border-red-500/20",         label: "Rejected" },
-    DRAFT:     { cls: "bg-foreground-muted/10 text-foreground-muted border border-border", label: "Draft" },
-    NOT_SUBMITTED: { cls: "bg-foreground-muted/5 text-foreground-muted/60 border border-border/50", label: "Not submitted" },
-  }
-  const s = map[status] ?? map["DRAFT"]!
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>
-      {s.label}
-    </span>
-  )
-}
-
 // ─────────────────────────────────────
-// Reject modal
+// Reject dialog (one actual, or every waiting actual in view)
 // ─────────────────────────────────────
 
-function RejectModal({
-  actualId,
+function RejectDialog({
+  open,
+  title,
+  message,
+  confirmLabel,
+  placeholder,
+  isPending,
   onClose,
   onConfirm,
-  isPending,
 }: {
-  actualId: string
-  onClose: () => void
-  onConfirm: (id: string, comment: string) => void
+  open: boolean
+  title: string
+  message: string
+  confirmLabel: string
+  placeholder: string
   isPending: boolean
+  onClose: () => void
+  onConfirm: (comment: string) => void
 }) {
+  const toast = useToast()
   const [comment, setComment] = useState("")
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (open) setComment("")
+  }, [open])
+
+  const submit = () => {
+    if (isPending) return
+    const text = comment.trim()
+    if (text.length < 3) {
+      toast("Add a reason so they know what to fix", { icon: "alert" })
+      fieldRef.current?.focus()
+      return
+    }
+    onConfirm(text)
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl border border-card-border bg-card-bg p-6 shadow-xl">
-        <h3 className="mb-1 text-base font-semibold text-foreground">Reject Submission</h3>
-        <p className="mb-4 text-sm text-foreground-muted">Provide a reason for rejection. The submitter will see this comment.</p>
+    <Modal open={open} onClose={onClose} title={title} locked={isPending}>
+      <p style={{ color: "var(--ink-2)", marginBottom: 14, fontSize: 14 }}>{message}</p>
+      <div className="field">
+        <label className="field-label" htmlFor="reject-comment">
+          Reason
+          <span className="field-hint"> shown to the submitter</span>
+        </label>
         <textarea
-          autoFocus
-          className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder-foreground-muted outline-none focus:border-red-500 resize-none"
+          ref={fieldRef}
+          id="reject-comment"
+          className="textarea"
           rows={3}
-          placeholder="e.g. The actual value doesn't match the Oracle report..."
+          placeholder={placeholder}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
         />
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm text-foreground-muted transition-colors hover:bg-card-hover"
-          >
-            Cancel
-          </button>
-          <button
-            disabled={comment.trim().length < 3 || isPending}
-            onClick={() => onConfirm(actualId, comment.trim())}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-40"
-          >
-            <XCircle className="h-4 w-4" />
-            {isPending ? "Rejecting…" : "Reject"}
-          </button>
-        </div>
       </div>
-    </div>
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isPending}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger"
+          aria-disabled={isPending || undefined}
+          onClick={submit}
+        >
+          {isPending ? "Rejecting…" : confirmLabel}
+        </button>
+      </div>
+    </Modal>
   )
 }
 
 // ─────────────────────────────────────
 // Row (uses AssignmentRow as data source)
 // ─────────────────────────────────────
+
+const COLUMN_COUNT = 9
 
 function ActualRow({
   row,
@@ -200,112 +227,119 @@ function ActualRow({
   const status = actual?.status ?? "NOT_SUBMITTED"
   const isPending = status === "SUBMITTED"
   const evidenceFiles = actual?.evidenceFiles ?? []
+  const detailId = `evidence-${row.id}`
+  const fullName = `${row.user.firstName} ${row.user.lastName}`
 
   return (
     <>
-      <tr className={`border-b border-border transition-colors hover:bg-card-hover ${!actual ? "opacity-60" : ""}`}>
+      <tr>
         {/* Member */}
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background-secondary text-xs font-bold text-foreground-secondary">
-              {row.user.firstName[0]}{row.user.lastName[0]}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {row.user.firstName} {row.user.lastName}
-              </p>
-              <p className="text-[11px] text-foreground-muted">
-                {TIER_SHORT[row.user.tier] ?? row.user.tier}
-              </p>
+        <td>
+          <div className="review-person">
+            <UserAvatar firstName={row.user.firstName} lastName={row.user.lastName} />
+            <div className="min-w-0">
+              <span className="review-person-name">{fullName}</span>
+              <span className="review-sub">{TIER_SHORT[row.user.tier] ?? row.user.tier}</span>
             </div>
           </div>
         </td>
 
         {/* KPI */}
-        <td className="px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">{kpi.code}</p>
-          <p className="mt-0.5 max-w-[200px] truncate text-[11px] text-foreground-muted" title={kpi.name}>{kpi.name}</p>
+        <td>
+          <span className="kpi-code">{kpi.code}</span>
+          <span className="review-kpi-name" title={kpi.name}>{kpi.name}</span>
         </td>
 
-        {/* Target */}
-        <td className="px-4 py-3 font-mono text-sm text-foreground-secondary">
-          {formatTarget(row)}
-        </td>
-
-        {/* Actual value */}
-        <td className="px-4 py-3 font-mono text-sm font-semibold text-foreground">
-          {formatValue(row)}
-        </td>
+        <td className="num ink-2">{formatTarget(row)}</td>
+        <td className="num" style={{ fontWeight: 600 }}>{formatValue(row)}</td>
+        <td className="num">{actual ? <ScoreBadge score={actual.score} /> : <span className="muted">—</span>}</td>
 
         {/* Submitted at */}
-        <td className="px-4 py-3 text-xs text-foreground-muted">
-          {actual?.submittedAt ? formatDate(actual.submittedAt) : "—"}
-        </td>
+        <td className="nowrap muted">{actual?.submittedAt ? formatDate(actual.submittedAt) : "—"}</td>
 
         {/* Status */}
-        <td className="px-4 py-3">
-          <StatusBadge status={status} />
+        <td>
+          {actual ? (
+            <ActualStatusChip status={status} />
+          ) : (
+            <StatusChip tone="neutral" small>Not submitted</StatusChip>
+          )}
+        </td>
+
+        {/* Evidence */}
+        <td>
+          {evidenceFiles.length > 0 ? (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              aria-expanded={expanded}
+              aria-controls={detailId}
+              aria-label={`${expanded ? "Hide" : "Show"} ${plural(evidenceFiles.length, "evidence file")}`}
+              onClick={() => setExpanded((e) => !e)}
+            >
+              <Paperclip size={15} strokeWidth={1.6} aria-hidden="true" />
+              <span className="tabular">{evidenceFiles.length}</span>
+              <ChevronDown
+                size={15}
+                aria-hidden="true"
+                style={{ transform: expanded ? "rotate(180deg)" : undefined }}
+              />
+            </button>
+          ) : (
+            <span className="muted">—</span>
+          )}
         </td>
 
         {/* Actions */}
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            {evidenceFiles.length > 0 && (
+        <td>
+          {isPending && actual ? (
+            <div className="row" style={{ gap: 6 }}>
               <button
-                onClick={() => setExpanded((e) => !e)}
-                className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] text-foreground-muted transition-colors hover:bg-card-hover hover:text-foreground"
-                title="View evidence"
+                type="button"
+                className="btn btn-sm btn-danger"
+                aria-disabled={isReviewing || undefined}
+                onClick={() => {
+                  if (!isReviewing) onReject(actual.id)
+                }}
               >
-                <FileText className="h-3 w-3" />
-                {evidenceFiles.length}
-                {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                <X size={15} strokeWidth={1.8} aria-hidden="true" />
+                Reject
               </button>
-            )}
-            {isPending && actual && (
-              <>
-                <button
-                  disabled={isReviewing}
-                  onClick={() => onApprove(actual.id)}
-                  className="flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-400 transition-colors hover:bg-green-500/20 disabled:opacity-40"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Approve
-                </button>
-                <button
-                  disabled={isReviewing}
-                  onClick={() => onReject(actual.id)}
-                  className="flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40"
-                >
-                  <XCircle className="h-3.5 w-3.5" />
-                  Reject
-                </button>
-              </>
-            )}
-            {!isPending && actual?.reviewComment && (
-              <span className="max-w-[160px] truncate text-[11px] text-foreground-muted italic" title={actual.reviewComment}>
-                {actual.reviewComment}
-              </span>
-            )}
-          </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                aria-disabled={isReviewing || undefined}
+                onClick={() => {
+                  if (!isReviewing) onApprove(actual.id)
+                }}
+              >
+                <Check size={15} strokeWidth={1.8} aria-hidden="true" />
+                Approve
+              </button>
+            </div>
+          ) : actual?.reviewComment ? (
+            <span className="review-comment" title={actual.reviewComment}>
+              {actual.reviewComment}
+            </span>
+          ) : (
+            <span className="muted">—</span>
+          )}
         </td>
       </tr>
 
-      {/* Evidence expansion row */}
+      {/* Evidence drawer */}
       {expanded && evidenceFiles.length > 0 && (
-        <tr className="border-b border-border bg-background-secondary/30">
-          <td colSpan={7} className="px-4 py-2">
-            <div className="flex flex-wrap gap-2">
+        <tr className="detail-row" id={detailId}>
+          <td colSpan={COLUMN_COUNT}>
+            <ul className="evidence-list" aria-label={`Evidence for ${kpi.code}, ${fullName}`}>
               {evidenceFiles.map((f) => (
-                <span
-                  key={f.id}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card-bg px-3 py-1.5 text-xs text-foreground-muted"
-                >
-                  <FileText className="h-3 w-3 shrink-0" />
-                  {f.fileName}
-                  <span className="text-foreground-muted/50">· {(f.fileSize / 1024).toFixed(0)} KB</span>
-                </span>
+                <li key={f.id} className="evidence-item">
+                  <FileText size={15} strokeWidth={1.6} aria-hidden="true" />
+                  <span title={f.fileName}>{f.fileName}</span>
+                  <span className="evidence-size">· {(f.fileSize / 1024).toFixed(0)} KB</span>
+                </li>
               ))}
-            </div>
+            </ul>
           </td>
         </tr>
       )}
@@ -314,7 +348,7 @@ function ActualRow({
 }
 
 // ─────────────────────────────────────
-// Pillar group (collapsible section)
+// Pillar group (collapsible list card)
 // ─────────────────────────────────────
 
 function PillarGroup({
@@ -332,127 +366,81 @@ function PillarGroup({
 }) {
   const [expanded, setExpanded] = useState(true)
   const pillar = PILLARS[pillarCode]
+  const pillarName = pillar?.name ?? `Pillar ${pillarCode}`
   const pendingCount = rows.filter((r) => r.actuals[0]?.status === "SUBMITTED").length
   const approvedCount = rows.filter((r) => r.actuals[0]?.status === "APPROVED").length
+  const bodyId = `review-pillar-${pillarCode}`
 
   return (
-    <div className="overflow-hidden rounded-xl border border-card-border bg-card-bg">
-      {/* Pillar header */}
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-card-hover"
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[11px] font-bold text-white"
-            style={{ backgroundColor: pillar?.color ?? "#94a3b8" }}
-          >
-            {pillarCode}
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">{pillar?.name ?? `Pillar ${pillarCode}`}</h3>
-            <p className="text-xs text-foreground-muted">
-              {rows.length} KPI{rows.length !== 1 ? "s" : ""} &middot; {approvedCount} approved
-              {pendingCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-500 px-1.5 py-0 text-[10px] font-bold text-white">
-                  {pendingCount} pending
-                </span>
-              )}
+    <section className="card list-card" aria-label={pillarName}>
+      <div className="card-head flex-wrap" style={expanded ? undefined : { borderBottom: 0 }}>
+        <div className="flex min-w-0 items-center gap-3">
+          <PillarTag code={pillarCode} big />
+          <div className="min-w-0">
+            <h2 className="card-title">{pillarName}</h2>
+            <p className="side-note tabular">
+              {plural(rows.length, "KPI")} · {approvedCount} approved
             </p>
           </div>
         </div>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-foreground-muted transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-          strokeWidth={1.5}
-        />
-      </button>
-
-      {/* Table */}
-      {expanded && (
-        <div className="border-t border-border">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border bg-background-secondary/50">
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Member</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">KPI</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Target</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Actual</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Submitted</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Status</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <ActualRow
-                    key={row.id}
-                    row={row}
-                    onApprove={onApprove}
-                    onReject={onReject}
-                    isReviewing={isReviewing}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─────────────────────────────────────
-// Bulk reject modal
-// ─────────────────────────────────────
-
-function BulkRejectModal({
-  count,
-  onClose,
-  onConfirm,
-  isPending,
-}: {
-  count: number
-  onClose: () => void
-  onConfirm: (comment: string) => void
-  isPending: boolean
-}) {
-  const [comment, setComment] = useState("")
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl border border-card-border bg-card-bg p-6 shadow-xl">
-        <h3 className="mb-1 text-base font-semibold text-foreground">
-          Reject {count} Submission{count !== 1 ? "s" : ""}
-        </h3>
-        <p className="mb-4 text-sm text-foreground-muted">
-          This comment will be applied to all {count} pending submission{count !== 1 ? "s" : ""} in the current view.
-        </p>
-        <textarea
-          autoFocus
-          className="w-full resize-none rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder-foreground-muted outline-none focus:border-red-500"
-          rows={3}
-          placeholder="e.g. Values not matching Oracle report — please resubmit with correct data..."
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-        />
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="row" style={{ gap: 8 }}>
+          {pendingCount > 0 && (
+            <StatusChip tone="warn" small>{pendingCount} waiting</StatusChip>
+          )}
           <button
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm text-foreground-muted transition-colors hover:bg-card-hover"
+            type="button"
+            className="btn btn-sm btn-ghost"
+            aria-expanded={expanded}
+            aria-controls={bodyId}
+            onClick={() => setExpanded((e) => !e)}
           >
-            Cancel
-          </button>
-          <button
-            disabled={comment.trim().length < 3 || isPending}
-            onClick={() => onConfirm(comment.trim())}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-40"
-          >
-            <XCircle className="h-4 w-4" />
-            {isPending ? "Rejecting…" : `Reject All ${count}`}
+            {expanded ? "Hide" : "Show"}
+            <ChevronDown
+              size={15}
+              aria-hidden="true"
+              style={{ transform: expanded ? "rotate(180deg)" : undefined }}
+            />
           </button>
         </div>
       </div>
-    </div>
+
+      {expanded && (
+        <div
+          id={bodyId}
+          className="table-scroll"
+          tabIndex={0}
+          role="region"
+          aria-label={`${pillarName} actuals`}
+        >
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Member</th>
+                <th scope="col">KPI</th>
+                <th scope="col" className="num">Target</th>
+                <th scope="col" className="num">Actual</th>
+                <th scope="col" className="num">Score</th>
+                <th scope="col">Submitted</th>
+                <th scope="col">Status</th>
+                <th scope="col">Evidence</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <ActualRow
+                  key={row.id}
+                  row={row}
+                  onApprove={onApprove}
+                  onReject={onReject}
+                  isReviewing={isReviewing}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -466,12 +454,14 @@ export default function ReviewQueuePage() {
   const { data: periods } = usePeriods()
   const { data: activePeriod } = useActivePeriod()
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("")
   const [pillarFilter, setPillarFilter] = useState("")
   const [tierFilter, setTierFilter] = useState("")
   const [memberFilter, setMemberFilter] = useState("")
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)
+  const [rejectShownId, setRejectShownId] = useState<string | null>(null)
   const [bulkRejectOpen, setBulkRejectOpen] = useState(false)
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("")
   const [isBulkPending, setIsBulkPending] = useState(false)
@@ -514,9 +504,13 @@ export default function ReviewQueuePage() {
       }
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["review-queue"] })
       setRejectTarget(null)
+      toast(vars.status === "APPROVED" ? "Actual approved" : "Actual rejected")
+    },
+    onError: (err: Error) => {
+      toast(`Could not save the review. ${err.message}`, { icon: "alert" })
     },
   })
 
@@ -524,7 +518,7 @@ export default function ReviewQueuePage() {
   const handleRejectConfirm = (id: string, comment: string) =>
     reviewMutation.mutate({ id, status: "REJECTED", comment })
 
-  const allRows = data ?? []
+  const allRows = useMemo(() => data ?? [], [data])
 
   // Derive unique members and tiers for filter dropdowns
   const uniqueMembers = useMemo(() =>
@@ -570,19 +564,26 @@ export default function ReviewQueuePage() {
   )
   const pendingCount = pendingVisible.length
   const totalPending = allRows.filter((r) => r.actuals[0]?.status === "SUBMITTED").length
+  const approvedTotal = allRows.filter((r) => r.actuals[0]?.status === "APPROVED").length
+  const rejectedTotal = allRows.filter((r) => r.actuals[0]?.status === "REJECTED").length
+  const notSubmittedTotal = allRows.filter((r) => getActualStatus(r) === "DRAFT").length
 
   // Bulk approve all pending in current view — single API call
   const handleBulkApprove = async () => {
-    if (pendingVisible.length === 0) return
+    if (pendingVisible.length === 0 || isBulkPending) return
     setIsBulkPending(true)
     try {
       const ids = pendingVisible.map((r) => r.actuals[0]!.id)
-      await fetch("/api/kpis/actuals/bulk-review", {
+      const res = await fetch("/api/kpis/actuals/bulk-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids, status: "APPROVED" }),
       })
       queryClient.invalidateQueries({ queryKey: ["review-queue"] })
+      if (res.ok) toast(`${plural(ids.length, "actual")} approved`)
+      else toast("Could not approve them all. Refresh and try again", { icon: "alert" })
+    } catch {
+      toast("Could not approve. Check your connection", { icon: "alert" })
     } finally {
       setIsBulkPending(false)
     }
@@ -594,13 +595,17 @@ export default function ReviewQueuePage() {
     setIsBulkPending(true)
     try {
       const ids = pendingVisible.map((r) => r.actuals[0]!.id)
-      await fetch("/api/kpis/actuals/bulk-review", {
+      const res = await fetch("/api/kpis/actuals/bulk-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids, status: "REJECTED", reviewComment: comment }),
       })
       queryClient.invalidateQueries({ queryKey: ["review-queue"] })
       setBulkRejectOpen(false)
+      if (res.ok) toast(`${plural(ids.length, "actual")} rejected`)
+      else toast("Could not reject them all. Refresh and try again", { icon: "alert" })
+    } catch {
+      toast("Could not reject. Check your connection", { icon: "alert" })
     } finally {
       setIsBulkPending(false)
     }
@@ -608,145 +613,172 @@ export default function ReviewQueuePage() {
 
   const pillars: PillarCode[] = ["A", "B", "C", "D", "E", "F"]
   const filterCount = [statusFilter, pillarFilter, tierFilter, memberFilter].filter(Boolean).length
+  const isReviewing = reviewMutation.isPending || isBulkPending
+
+  // `rejectShownId` outlives `rejectTarget` so the dialog keeps its text
+  // while it animates closed.
+  const shownRejectRow = useMemo(
+    () => (rejectShownId ? allRows.find((r) => r.actuals[0]?.id === rejectShownId) ?? null : null),
+    [allRows, rejectShownId]
+  )
+
+  const subFacts = isLoading
+    ? ["Loading…"]
+    : [
+        visibleRows.length === allRows.length
+          ? plural(allRows.length, "KPI")
+          : `${visibleRows.length} of ${plural(allRows.length, "KPI")} shown`,
+        `${totalPending} waiting`,
+        `${rejectedTotal} rejected`,
+        ...(!isAdmin ? ["Full team hierarchy"] : []),
+      ]
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Review Queue"
-        description={`${visibleRows.length} KPI${visibleRows.length !== 1 ? "s" : ""}${pendingCount > 0 ? ` · ${pendingCount} pending` : ""}`}
+    <>
+      <PageHead title="Review queue" sub={subFacts.join(" · ")} />
+
+      <StatGrid>
+        <StatTile
+          label="Waiting for review"
+          value={totalPending}
+          sub="Submitted, not reviewed"
+          onClick={() => setStatusFilter("SUBMITTED")}
+        />
+        <StatTile label="Approved" value={approvedTotal} onClick={() => setStatusFilter("APPROVED")} />
+        <StatTile label="Rejected" value={rejectedTotal} onClick={() => setStatusFilter("REJECTED")} />
+        <StatTile label="Not submitted" value={notSubmittedTotal} sub="Draft or no actual yet" />
+      </StatGrid>
+
+      <ChipRow<StatusFilter>
+        label="Status"
+        value={statusFilter}
+        onChange={setStatusFilter}
+        options={[
+          { value: "", label: "All" },
+          { value: "SUBMITTED", label: totalPending > 0 ? `Waiting · ${totalPending}` : "Waiting" },
+          { value: "APPROVED", label: "Approved" },
+          { value: "REJECTED", label: "Rejected" },
+        ]}
       />
 
-      {reviewMutation.isError && (
-        <div className="rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
-          {reviewMutation.error?.message}
-        </div>
-      )}
-
-      {/* ── Filters ── */}
-      <div className="glass-card p-4 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status tabs */}
-          <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-            {(["", "SUBMITTED", "APPROVED", "REJECTED"] as StatusFilter[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 transition-colors ${
-                  statusFilter === s
-                    ? "bg-blue-600 text-white"
-                    : "text-foreground-muted hover:bg-card-hover hover:text-foreground"
-                }`}
+      <div className="toolbar flex-wrap items-center">
+        {periods && periods.length > 0 && (
+          <div className="min-w-[160px] flex-1 sm:flex-none">
+            <label className="sr-only" htmlFor="review-period">Period</label>
+            <SelectWrap>
+              <select
+                id="review-period"
+                className="select"
+                value={selectedPeriodId}
+                onChange={(e) => setSelectedPeriodId(e.target.value)}
               >
-                {s === "" ? "All" : s === "SUBMITTED" ? "Pending" : s.charAt(0) + s.slice(1).toLowerCase()}
-                {s === "SUBMITTED" && totalPending > 0 && (
-                  <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    {totalPending}
-                  </span>
-                )}
-              </button>
-            ))}
+                <option value="">All periods</option>
+                {(periods as Array<{ id: string; name: string; isActive: boolean; isClosed: boolean }>).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.isClosed ? " (closed)" : p.isActive ? " (active)" : ""}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
           </div>
+        )}
 
-          {filterCount > 0 && (
-            <button
-              onClick={() => { setStatusFilter(""); setPillarFilter(""); setTierFilter(""); setMemberFilter("") }}
-              className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground-muted hover:bg-card-hover hover:text-foreground transition-colors"
-            >
-              Clear filters ({filterCount})
-            </button>
-          )}
-
-          {!isAdmin && (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-foreground-muted">
-              <Clock className="h-3.5 w-3.5" />
-              Full team hierarchy
-            </span>
-          )}
-        </div>
-
-        {/* Second row — dropdowns */}
-        <div className="flex flex-wrap gap-2">
-          {/* Period */}
-          {periods && periods.length > 0 && (
+        <div className="min-w-[160px] flex-1 sm:flex-none">
+          <label className="sr-only" htmlFor="review-pillar">Pillar</label>
+          <SelectWrap>
             <select
-              value={selectedPeriodId}
-              onChange={(e) => setSelectedPeriodId(e.target.value)}
-              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
+              id="review-pillar"
+              className="select"
+              value={pillarFilter}
+              onChange={(e) => setPillarFilter(e.target.value)}
             >
-              <option value="">All Periods</option>
-              {(periods as Array<{ id: string; name: string; isActive: boolean; isClosed: boolean }>).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}{p.isClosed ? " (Closed)" : p.isActive ? " (Active)" : ""}
-                </option>
+              <option value="">All pillars</option>
+              {pillars.map((p) => (
+                <option key={p} value={p}>{p} · {PILLARS[p]?.name}</option>
               ))}
             </select>
-          )}
+          </SelectWrap>
+        </div>
 
-          {/* Pillar */}
-          <select
-            value={pillarFilter}
-            onChange={(e) => setPillarFilter(e.target.value)}
-            className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
+        {uniqueTiers.length > 1 && (
+          <div className="min-w-[140px] flex-1 sm:flex-none">
+            <label className="sr-only" htmlFor="review-tier">Tier</label>
+            <SelectWrap>
+              <select
+                id="review-tier"
+                className="select"
+                value={tierFilter}
+                onChange={(e) => setTierFilter(e.target.value)}
+              >
+                <option value="">All tiers</option>
+                {uniqueTiers.map((t) => (
+                  <option key={t} value={t}>{TIER_SHORT[t] ?? t}</option>
+                ))}
+              </select>
+            </SelectWrap>
+          </div>
+        )}
+
+        {uniqueMembers.length > 1 && (
+          <div className="min-w-[160px] flex-1 sm:flex-none">
+            <label className="sr-only" htmlFor="review-member">Member</label>
+            <SelectWrap>
+              <select
+                id="review-member"
+                className="select"
+                value={memberFilter}
+                onChange={(e) => setMemberFilter(e.target.value)}
+              >
+                <option value="">All members</option>
+                {uniqueMembers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName} · {TIER_SHORT[u.tier] ?? u.tier}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
+          </div>
+        )}
+
+        {filterCount > 0 && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => { setStatusFilter(""); setPillarFilter(""); setTierFilter(""); setMemberFilter("") }}
           >
-            <option value="">All Pillars</option>
-            {pillars.map((p) => (
-              <option key={p} value={p}>Pillar {p} — {PILLARS[p]?.name}</option>
-            ))}
-          </select>
-
-          {/* Tier */}
-          {uniqueTiers.length > 1 && (
-            <select
-              value={tierFilter}
-              onChange={(e) => setTierFilter(e.target.value)}
-              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
-            >
-              <option value="">All Tiers</option>
-              {uniqueTiers.map((t) => (
-                <option key={t} value={t}>{TIER_SHORT[t] ?? t}</option>
-              ))}
-            </select>
-          )}
-
-          {/* Member */}
-          {uniqueMembers.length > 1 && (
-            <select
-              value={memberFilter}
-              onChange={(e) => setMemberFilter(e.target.value)}
-              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
-            >
-              <option value="">All Members</option>
-              {uniqueMembers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} · {TIER_SHORT[u.tier] ?? u.tier}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+            Clear {plural(filterCount, "filter")}
+          </button>
+        )}
       </div>
 
       {/* ── Pillar-grouped content ── */}
       {isLoading ? (
         <LoadingSpinner />
       ) : visibleRows.length === 0 ? (
-        <div className="rounded-xl border border-card-border bg-card-bg py-16 text-center">
-          <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-400/30" />
-          <p className="text-sm font-medium text-foreground">
-            {statusFilter === "SUBMITTED" ? "No pending submissions" : "Nothing to show"}
-          </p>
-          <p className="mt-1 text-xs text-foreground-muted">Try changing the filters.</p>
+        <div className="card-list">
+          <EmptyState
+            icon={ClipboardCheck}
+            title={statusFilter === "SUBMITTED" ? "Nothing waiting for review" : "No actuals to show"}
+            description={
+              filterCount > 0
+                ? "Try another status, pillar or member, or clear the filters."
+                : "Submitted actuals from your team appear here."
+            }
+          />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div>
           {activePillarCodes.map((code) => (
             <PillarGroup
               key={code}
               pillarCode={code}
               rows={groupedByPillar.get(code) ?? []}
               onApprove={handleApprove}
-              onReject={(id) => setRejectTarget(id)}
-              isReviewing={reviewMutation.isPending || isBulkPending}
+              onReject={(id) => {
+                setRejectShownId(id)
+                setRejectTarget(id)
+              }}
+              isReviewing={isReviewing}
             />
           ))}
         </div>
@@ -754,53 +786,66 @@ export default function ReviewQueuePage() {
 
       {/* ── Bulk actions bar ── */}
       {pendingCount > 0 && (
-        <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-card-border bg-card-bg/95 px-5 py-3 shadow-xl backdrop-blur">
-          <p className="text-sm text-foreground-muted">
-            <span className="font-semibold text-foreground">{pendingCount}</span> pending submission{pendingCount !== 1 ? "s" : ""} in current view
-            {visibleRows.length > pendingCount && (
-              <span className="ml-1 text-foreground-muted/60">({visibleRows.length} total KPIs shown)</span>
-            )}
-          </p>
-          <div className="flex items-center gap-2">
+        <div className="review-bulk" role="region" aria-label="Review everything waiting in this view">
+          <span>
+            <b>{pendingCount}</b> waiting in this view
+            {visibleRows.length > pendingCount && ` · ${plural(visibleRows.length, "KPI")} shown`}
+          </span>
+          <div className="row" style={{ gap: 8 }}>
             <button
-              disabled={isBulkPending || reviewMutation.isPending}
-              onClick={handleBulkApprove}
-              className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/20 disabled:opacity-40"
+              type="button"
+              className="btn btn-danger"
+              aria-disabled={isReviewing || undefined}
+              onClick={() => {
+                if (!isReviewing) setBulkRejectOpen(true)
+              }}
             >
-              <CheckCircle2 className="h-4 w-4" />
-              {isBulkPending ? "Processing…" : `Approve All ${pendingCount}`}
+              Reject all {pendingCount}
             </button>
             <button
-              disabled={isBulkPending || reviewMutation.isPending}
-              onClick={() => setBulkRejectOpen(true)}
-              className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40"
+              type="button"
+              className="btn btn-primary"
+              aria-disabled={isReviewing || undefined}
+              onClick={() => {
+                if (!isReviewing) void handleBulkApprove()
+              }}
             >
-              <XCircle className="h-4 w-4" />
-              Reject All {pendingCount}
+              <Check size={16} strokeWidth={1.8} aria-hidden="true" />
+              {isBulkPending ? "Saving…" : `Approve all ${pendingCount}`}
             </button>
           </div>
         </div>
       )}
 
-      {/* Single reject modal */}
-      {rejectTarget && (
-        <RejectModal
-          actualId={rejectTarget}
-          onClose={() => setRejectTarget(null)}
-          onConfirm={handleRejectConfirm}
-          isPending={reviewMutation.isPending}
-        />
-      )}
+      {/* Single reject dialog */}
+      <RejectDialog
+        open={rejectTarget !== null}
+        title="Reject this actual?"
+        message={
+          shownRejectRow
+            ? `${shownRejectRow.kpiDefinition.code} for ${shownRejectRow.user.firstName} ${shownRejectRow.user.lastName} goes back to them with your reason.`
+            : "It goes back to the submitter with your reason."
+        }
+        confirmLabel="Reject actual"
+        placeholder="For example: the value doesn't match the Oracle report"
+        isPending={reviewMutation.isPending}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={(comment) => {
+          if (rejectTarget) handleRejectConfirm(rejectTarget, comment)
+        }}
+      />
 
-      {/* Bulk reject modal */}
-      {bulkRejectOpen && (
-        <BulkRejectModal
-          count={pendingCount}
-          onClose={() => setBulkRejectOpen(false)}
-          onConfirm={handleBulkRejectConfirm}
-          isPending={isBulkPending}
-        />
-      )}
-    </div>
+      {/* Bulk reject dialog */}
+      <RejectDialog
+        open={bulkRejectOpen}
+        title={`Reject ${plural(pendingCount, "actual")}?`}
+        message={`Every actual waiting in this view goes back with the same reason.`}
+        confirmLabel={`Reject ${plural(pendingCount, "actual")}`}
+        placeholder="For example: values don't match the Oracle report, please resubmit"
+        isPending={isBulkPending}
+        onClose={() => setBulkRejectOpen(false)}
+        onConfirm={(comment) => void handleBulkRejectConfirm(comment)}
+      />
+    </>
   )
 }

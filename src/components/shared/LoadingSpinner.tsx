@@ -1,15 +1,9 @@
-export function LoadingSpinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const sizeClass = {
-    sm: "h-4 w-4",
-    md: "h-8 w-8",
-    lg: "h-12 w-12",
-  }[size]
-
+/** Quiet loading line. Sizes are kept for old call sites; all render alike. */
+export function LoadingSpinner({ label = "Loading…" }: { size?: "sm" | "md" | "lg"; label?: string }) {
   return (
-    <div className="flex items-center justify-center py-8">
-      <div
-        className={`${sizeClass} animate-spin rounded-full border-2 border-foreground-muted border-t-blue-500`}
-      />
+    <div className="loading" role="status">
+      <span className="spinner" aria-hidden="true" />
+      {label}
     </div>
   )
 }

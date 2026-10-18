@@ -2,10 +2,17 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { PageHeader } from "@/components/shared/PageHeader"
+import { UserCheck, UserX, Info } from "lucide-react"
+import { PageHead } from "@/components/ui/PageHead"
+import { SearchInput } from "@/components/ui/Field"
+import { StatusChip, TagPill } from "@/components/ui/StatusChip"
+import { ConfirmDialog } from "@/components/ui/Modal"
+import { useToast } from "@/components/ui/Toast"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
+import { EmptyState } from "@/components/shared/EmptyState"
+import { UserAvatar } from "@/components/layout/UserMenu"
 import { TIER_LABELS, TIER_SHORT, ROLE_LABELS } from "@/lib/constants"
-import { UserX, UserCheck, Search, Mail, Clock, AlertTriangle } from "lucide-react"
+import "@/styles/views/admin-users.css"
 
 interface InactiveUser {
   id: string
@@ -13,6 +20,7 @@ interface InactiveUser {
   lastName: string
   email: string
   employeeId: string | null
+  avatarUrl?: string | null
   role: string
   tier: string
   jobTitle: string | null
@@ -25,19 +33,12 @@ interface InactiveUser {
   }
 }
 
-const TIER_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  SECTION_HEAD: { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-500" },
-  TEAM_LEAD:    { bg: "bg-blue-500/10",   text: "text-blue-400",   dot: "bg-blue-500"   },
-  SENIOR:       { bg: "bg-emerald-500/10",text: "text-emerald-400",dot: "bg-emerald-500" },
-  ENGINEER:     { bg: "bg-sky-500/10",    text: "text-sky-400",    dot: "bg-sky-500"     },
-  JUNIOR:       { bg: "bg-amber-500/10",  text: "text-amber-400",  dot: "bg-amber-500"  },
-}
-const DEFAULT_COLOR = { bg: "bg-sky-500/10", text: "text-sky-400", dot: "bg-sky-500" }
-
 export default function InactiveUsersPage() {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [search, setSearch] = useState("")
   const [reactivating, setReactivating] = useState<string | null>(null)
+  const [confirmUser, setConfirmUser] = useState<InactiveUser | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "users", "inactive"],
@@ -58,11 +59,18 @@ export default function InactiveUsersPage() {
       if (!res.ok) throw new Error("Failed to reactivate")
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (_result, userId) => {
+      const u = (data?.data as InactiveUser[] | undefined)?.find((x) => x.id === userId)
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
       setReactivating(null)
+      setConfirmUser(null)
+      toast(u ? `${u.firstName} ${u.lastName} reactivated` : "User reactivated")
     },
-    onError: () => setReactivating(null),
+    onError: () => {
+      setReactivating(null)
+      setConfirmUser(null)
+      toast("Could not reactivate. Check your connection and try again", { icon: "alert" })
+    },
   })
 
   const users: InactiveUser[] = data?.data ?? []
@@ -78,153 +86,160 @@ export default function InactiveUsersPage() {
     )
   })
 
+  const countLabel = `${users.length} deactivated ${users.length === 1 ? "account" : "accounts"}`
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Inactive Users"
-        description={`${users.length} deactivated account${users.length !== 1 ? "s" : ""} — hidden from all other pages`}
+    <div>
+      <PageHead
+        title="Inactive users"
+        sub={isLoading ? "Loading…" : `${countLabel} · hidden from all other pages`}
       />
 
-      {/* Warning banner */}
-      <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" strokeWidth={1.5} />
-        <p className="text-sm text-amber-300/80">
-          Inactive users are excluded from team views, assignments, scoring, analytics, and all reports.
-          Their historical data is preserved in the database. Reactivating restores full access.
-        </p>
+      <div className="sample-banner offline-banner" role="note">
+        <span className="sample-banner-ic">
+          <Info size={14} strokeWidth={1.8} aria-hidden="true" />
+        </span>
+        <span className="grow">
+          Inactive users are left out of team views, assignments, scoring, analytics and reports. Their history is kept,
+          and reactivating restores full access.
+        </span>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-muted" strokeWidth={1.5} />
-        <input
-          type="text"
-          placeholder="Search by name, email, title, or ID..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border border-border bg-card-bg py-2.5 pl-10 pr-4 text-sm text-foreground placeholder-foreground-muted outline-none transition-colors focus:border-blue-500"
-        />
-      </div>
-
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-card-border bg-card-bg py-16 text-center">
-          <UserX className="h-10 w-10 text-foreground-muted/30" strokeWidth={1.5} />
-          <p className="text-sm text-foreground-muted">
-            {search ? "No inactive users match your search." : "No inactive users — everyone is active."}
-          </p>
-        </div>
-      ) : (
-        <div className="glass-card overflow-hidden">
-          <div className="border-b border-border px-5 py-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground-secondary">
-              {filtered.length} user{filtered.length !== 1 ? "s" : ""}
-              {search && <span className="text-foreground-muted"> matching &quot;{search}&quot;</span>}
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border bg-background-secondary/50">
-                  <th className="w-8 px-4 py-2.5 text-xs font-medium text-foreground-muted">#</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Name</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Email</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Role / Tier</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Job Title</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Employee ID</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Last Login</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((u, i) => {
-                  const c = TIER_COLORS[u.tier] ?? DEFAULT_COLOR
-                  const lastLogin = u.lastLoginAt
-                    ? new Date(u.lastLoginAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-                    : "Never"
-
-                  return (
-                    <tr key={u.id} className="border-b border-border/50 opacity-75 hover:opacity-100 transition-opacity">
-                      <td className="px-4 py-3 text-xs text-foreground-muted/50 tabular-nums">{i + 1}</td>
-
-                      {/* Name */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background-secondary text-[11px] font-bold text-foreground-muted">
-                            {u.firstName[0]}{u.lastName[0]}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground-secondary line-through decoration-foreground-muted/40">
-                              {u.firstName} {u.lastName}
-                            </p>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
-                              <UserX className="h-2.5 w-2.5" />
-                              Inactive
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Email */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 text-foreground-muted">
-                          <Mail className="h-3.5 w-3.5 shrink-0 text-foreground-muted/40" strokeWidth={1.5} />
-                          <span className="font-mono text-xs">{u.email}</span>
-                        </div>
-                      </td>
-
-                      {/* Role / Tier */}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs text-foreground-muted">{ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role}</span>
-                          <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.bg} ${c.text}`}>
-                            <span className={`h-1 w-1 rounded-full ${c.dot}`} />
-                            {TIER_SHORT[u.tier] ?? u.tier}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Job Title */}
-                      <td className="px-4 py-3 text-sm text-foreground-muted">
-                        {u.jobTitle || TIER_LABELS[u.tier as keyof typeof TIER_LABELS] || "—"}
-                      </td>
-
-                      {/* Employee ID */}
-                      <td className="px-4 py-3 font-mono text-xs text-foreground-muted">
-                        {u.employeeId ? `#${u.employeeId}` : "—"}
-                      </td>
-
-                      {/* Last Login */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 text-xs text-foreground-muted">
-                          <Clock className="h-3 w-3 text-foreground-muted/40" strokeWidth={1.5} />
-                          {lastLogin}
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => {
-                            setReactivating(u.id)
-                            reactivate.mutate(u.id)
-                          }}
-                          disabled={reactivating === u.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
-                        >
-                          <UserCheck className="h-3.5 w-3.5" strokeWidth={1.5} />
-                          {reactivating === u.id ? "Reactivating…" : "Reactivate"}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+      {users.length > 0 && (
+        <div className="toolbar">
+          <SearchInput
+            placeholder="Search name, email, title or ID"
+            aria-label="Search inactive users"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       )}
+
+      {isLoading ? (
+        <LoadingSpinner label="Loading inactive users…" />
+      ) : users.length === 0 ? (
+        <div className="card-list">
+          <EmptyState
+            icon={UserCheck}
+            title="No inactive users"
+            description="Deactivated accounts appear here so you can restore them."
+          />
+        </div>
+      ) : (
+        <section className="card list-card">
+          <div className="card-head">
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="card-title">Deactivated accounts</h2>
+              <TagPill>{filtered.length}</TagPill>
+            </div>
+            {search && (
+              <span className="side-note" style={{ overflowWrap: "anywhere" }}>
+                Matching “{search}”
+              </span>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={UserX}
+              title="No inactive users match"
+              description="Try a different name, email, title or employee ID."
+              action={
+                <button type="button" className="btn" onClick={() => setSearch("")}>
+                  Clear search
+                </button>
+              }
+            />
+          ) : (
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Inactive users">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col" className="num">#</th>
+                    <th scope="col">Person</th>
+                    <th scope="col">Role · tier</th>
+                    <th scope="col">Job title</th>
+                    <th scope="col">Employee ID</th>
+                    <th scope="col">Last sign-in</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((u, i) => {
+                    const name = `${u.firstName} ${u.lastName}`
+                    const lastLogin = u.lastLoginAt
+                      ? new Date(u.lastLoginAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                      : "Never"
+                    const busy = reactivating === u.id
+
+                    return (
+                      <tr key={u.id} className="hover">
+                        <td className="num muted">{i + 1}</td>
+                        <td>
+                          <div className="person-cell">
+                            <UserAvatar firstName={u.firstName} lastName={u.lastName} avatarUrl={u.avatarUrl} />
+                            <div className="person-text">
+                              <span className="person-name">{name}</span>
+                              <span className="person-sub">{u.email}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <TagPill>{ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role}</TagPill>
+                            <span className="ink-2 nowrap">{TIER_SHORT[u.tier] ?? u.tier}</span>
+                          </div>
+                        </td>
+                        <td className="clip muted">
+                          {u.jobTitle || TIER_LABELS[u.tier as keyof typeof TIER_LABELS] || "—"}
+                        </td>
+                        <td className="nowrap">
+                          {u.employeeId ? <span className="kpi-code">#{u.employeeId}</span> : <span className="muted">—</span>}
+                        </td>
+                        <td className="nowrap muted tabular">{lastLogin}</td>
+                        <td>
+                          <StatusChip tone="neutral" small>Inactive</StatusChip>
+                        </td>
+                        <td className="num">
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            aria-label={`Reactivate ${name}`}
+                            aria-disabled={busy || undefined}
+                            onClick={() => {
+                              if (!busy) setConfirmUser(u)
+                            }}
+                          >
+                            <UserCheck size={15} aria-hidden="true" />
+                            {busy ? "Reactivating…" : "Reactivate"}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={confirmUser !== null}
+        title={confirmUser ? `Reactivate ${confirmUser.firstName} ${confirmUser.lastName}?` : "Reactivate this user?"}
+        message="They can sign in again and reappear in teams, assignments, scoring and reports."
+        confirmLabel="Reactivate user"
+        danger={false}
+        busy={reactivate.isPending}
+        onConfirm={() => {
+          if (!confirmUser) return
+          setReactivating(confirmUser.id)
+          reactivate.mutate(confirmUser.id)
+        }}
+        onCancel={() => setConfirmUser(null)}
+      />
     </div>
   )
 }

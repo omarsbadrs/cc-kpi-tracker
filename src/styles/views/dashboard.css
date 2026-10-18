@@ -1,0 +1,687 @@
+/* Dashboard scorecard pieces (personal dashboard, member drill-down, admin
+   insights). Only what the system's own classes don't already cover; every
+   colour is a token. */
+
+@layer components {
+  /* ---------- Profile summary ---------- */
+
+  .profile-card .client-head {
+    margin-bottom: 14px;
+  }
+
+  .profile-name {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .profile-sub {
+    margin-top: 1px;
+    font-size: 13px;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  /* The facts sit under a rule, like a form section, not in a second box. */
+  .profile-card .kv-grid {
+    padding-top: 14px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* ---------- Overall score ---------- */
+
+  .score-card-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .score-card-facts {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--ink-3);
+  }
+
+  .score-change {
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Scorecard hero ---------- */
+
+  /* One ruled card: identity and read-outs on the panel, the score on a
+     recessed band at the end. The band is the system's "strip inside a
+     panel", so the score reads as set apart without a fill or a shadow. */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    overflow: clip;
+  }
+
+  .hero-main {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+    padding: 22px 22px 20px;
+  }
+
+  .hero-identity {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .hero-identity-text {
+    min-width: 0;
+  }
+
+  .hero-name {
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .hero-sub {
+    margin-top: 3px;
+    font-size: 13.5px;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  /* Facts as a quiet row of label · value pairs. */
+  .hero-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .hero-fact {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-full);
+    background: var(--band);
+    font-size: 12.5px;
+    min-width: 0;
+  }
+
+  .hero-fact dt {
+    color: var(--ink-3);
+  }
+
+  .hero-fact dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  /* Three read-outs, divided by rules. */
+  .hero-insights {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .hero-insight {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 14px 0 0;
+  }
+
+  .hero-insight + .hero-insight {
+    margin-top: 14px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .hero-insight dt {
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+
+  .hero-insight dd {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .hero-insight-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 19px;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+  }
+
+  .hero-insight-of {
+    font-size: 13px;
+    font-weight: 450;
+    letter-spacing: 0;
+    color: var(--ink-3);
+  }
+
+  .hero-insight-sub {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  .hero-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 22px 20px 24px;
+    background: var(--band);
+    border-top: 1px solid var(--hairline);
+    text-align: center;
+  }
+
+  .hero-score-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+
+  .hero-score-note {
+    max-width: 240px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (min-width: 640px) {
+    .hero-insights {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .hero-insight {
+      padding: 14px 16px 0;
+    }
+
+    .hero-insight:first-child {
+      padding-inline-start: 0;
+    }
+
+    .hero-insight + .hero-insight {
+      margin-top: 0;
+      border-top: 0;
+      border-inline-start: 1px solid var(--hairline);
+    }
+  }
+
+  @media (min-width: 900px) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr) 280px;
+    }
+
+    .hero-score {
+      border-top: 0;
+      border-inline-start: 1px solid var(--hairline);
+    }
+  }
+
+  /* A section heading with a note at the far end. */
+  .section-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 22px 0 10px;
+  }
+
+  .section-row .section-head {
+    margin: 0;
+  }
+
+  .section-note {
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+
+  /* ---------- Executive dashboard ---------- */
+
+  .filters-card {
+    margin-bottom: 18px;
+  }
+
+  .filters-card .field-grid .field {
+    margin-bottom: 0;
+  }
+
+  .filters-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+    font-size: 13px;
+  }
+
+  /* The count of filters on, inside the Filters button. */
+  .filter-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--r-full);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* Score on a recessed band beside four figures, as one block. */
+  .exec-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .exec-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 18px 16px 20px;
+    background: var(--band);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    text-align: center;
+  }
+
+  .exec-tiles .stat-grid {
+    height: 100%;
+    margin-bottom: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+  }
+
+  .exec-tiles .stat-tile {
+    justify-content: center;
+    padding: 16px 18px;
+  }
+
+  .exec-tiles .stat-value {
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+  }
+
+  @media (min-width: 980px) {
+    .exec-hero {
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
+  }
+
+  .exec-row {
+    margin-bottom: 16px;
+  }
+
+  .exec-row > .card,
+  .exec-row > .list-card {
+    margin-bottom: 0;
+    height: 100%;
+  }
+
+  /* Pillar scorecard table: the name, then a wide bar. */
+  .pillar-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-weight: 550;
+  }
+
+  .pillar-cell-name {
+    white-space: nowrap;
+  }
+
+  .pillar-table .bar-col {
+    width: 34%;
+    min-width: 140px;
+  }
+
+  .pillar-table tbody th,
+  .pillar-table tbody td {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* Appraisal bands: one stacked bar, then the legend as a ruled list. */
+  .band-bar {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+    margin: 4px 0 16px;
+    border-radius: var(--r-full);
+    overflow: hidden;
+    background: var(--track);
+  }
+
+  .band-seg {
+    flex-basis: 0;
+    min-width: 4px;
+  }
+
+  .band-legend {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .band-legend-row {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto 40px 44px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13.5px;
+  }
+
+  .band-legend-row + .band-legend-row {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .band-legend-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink-2);
+  }
+
+  .band-legend-range,
+  .band-legend-pct {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    text-align: end;
+  }
+
+  .band-legend-count {
+    font-weight: 600;
+    text-align: end;
+  }
+
+  /* Donut with its headline figure in the hole, legend beside it. */
+  .donut-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+  }
+
+  .donut-wrap > .donut {
+    position: relative;
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+
+  .donut-wrap > .donut-legend {
+    flex: 1.3 1 220px;
+    min-width: 0;
+  }
+
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .donut-value {
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+
+  .donut-label {
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  .exec-attention .empty {
+    padding: 36px 20px;
+  }
+
+  /* Rank in the row's icon tile. */
+  .rank-ic {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--ink-2);
+  }
+
+  /* Workforce, score spread, trend: three small cards. */
+  .exec-trio {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .exec-trio > .card {
+    margin-bottom: 0;
+  }
+
+  @media (min-width: 980px) {
+    .exec-trio {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .hbar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .hbar-row {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr) 28px;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .hbar-label {
+    color: var(--ink-2);
+  }
+
+  .hbar-track {
+    height: 8px;
+    border-radius: var(--r-full);
+    background: var(--track);
+    overflow: hidden;
+  }
+
+  .hbar-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--series-1);
+  }
+
+  .hbar-value {
+    font-weight: 600;
+    text-align: end;
+  }
+
+  .trend-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 0 6px;
+  }
+
+  .trend-empty-value {
+    font-size: 30px;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+  }
+
+  /* ---------- Grouped KPI table ---------- */
+
+  /* The whole group heading is the toggle, so the hit area is the row. */
+  .group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 28px;
+    text-align: start;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* Inside the scroll rail, which clips: draw the ring inside. */
+  .group-toggle:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .group-toggle .group-chev {
+    flex: none;
+    color: var(--ink-3);
+    transition: transform 0.15s var(--ease-spring);
+  }
+
+  .group-toggle[aria-expanded="false"] .group-chev {
+    transform: rotate(-90deg);
+  }
+
+  [dir="rtl"] .group-toggle[aria-expanded="false"] .group-chev {
+    transform: rotate(90deg);
+  }
+
+  .group-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .group-facts {
+    margin-inline-start: auto;
+    padding-inline-start: 12px;
+    font-size: 12.5px;
+    font-weight: 450;
+    color: var(--ink-3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Chart legends with written values ---------- */
+
+  .chart-with-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 18px;
+  }
+
+  .chart-with-legend > .chart {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+
+  .legend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 150px;
+    min-width: 0;
+    font-size: 12.5px;
+  }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-2);
+  }
+
+  .legend-row > .legend-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .legend-value {
+    margin-inline-start: auto;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .legend-value .muted {
+    margin-inline-start: 4px;
+    font-weight: 450;
+  }
+
+  .legend-total {
+    margin-top: 2px;
+    padding-top: 6px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .chart-tooltip .rep-swatch {
+    flex: none;
+  }
+
+  /* ---------- Table cells ---------- */
+
+  .data-table .cell-title {
+    font-weight: 550;
+  }
+
+  .data-table .cell-sub {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--ink-3);
+  }
+
+  .data-table .cell-figure {
+    font-weight: 600;
+  }
+}

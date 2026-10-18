@@ -1,27 +1,22 @@
-import { cn } from "@/lib/utils"
+import type { Tone } from "@/lib/constants"
 
-const variants = {
-  default: "bg-blue-500/10 text-blue-400 border-blue-500/15",
-  success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/15",
-  warning: "bg-amber-500/10 text-amber-400 border-amber-500/15",
-  danger: "bg-red-500/10 text-red-400 border-red-500/15",
-  neutral: "bg-foreground-muted/10 text-foreground-muted border-foreground-muted/10",
-}
+const TONES = {
+  default: "info",
+  success: "ok",
+  warning: "warn",
+  danger: "bad",
+  neutral: "neutral",
+} as const satisfies Record<string, Tone>
 
 interface BadgeProps {
   children: React.ReactNode
-  variant?: keyof typeof variants
+  variant?: keyof typeof TONES
   className?: string
 }
 
+/** A small status chip (dot + word). Prefer StatusChip in new code. */
 export function Badge({ children, variant = "default", className }: BadgeProps) {
   return (
-    <span className={cn(
-      "inline-flex items-center rounded-lg border px-2 py-0.5 text-[10px] font-semibold",
-      variants[variant],
-      className
-    )}>
-      {children}
-    </span>
+    <span className={`status-chip small tone-${TONES[variant]}${className ? ` ${className}` : ""}`}>{children}</span>
   )
 }

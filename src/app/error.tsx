@@ -1,6 +1,9 @@
 "use client"
 
 import { useEffect } from "react"
+import Link from "next/link"
+import { AlertTriangle } from "lucide-react"
+import "@/styles/views/account.css"
 
 export default function GlobalError({
   error,
@@ -14,20 +17,23 @@ export default function GlobalError({
   }, [error])
 
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center p-8">
-      <div className="text-center">
-        <div className="mb-4 text-6xl font-bold text-red-500">500</div>
-        <h1 className="mb-2 text-xl font-semibold text-foreground">Something went wrong</h1>
-        <p className="mb-6 text-sm text-foreground-muted">
-          {error.message || "An unexpected error occurred. Please try again."}
-        </p>
-        <button
-          onClick={reset}
-          className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Try again
-        </button>
-      </div>
+    <div className="auth-shell">
+      <main className="card status-card">
+        <div className="empty">
+          <AlertTriangle size={22} strokeWidth={1.6} aria-hidden="true" className="empty-icon" />
+          <h1>Something went wrong</h1>
+          <p>{error.message || "An unexpected error occurred. Try again, or go back to your dashboard."}</p>
+          {error.digest && <p className="side-note tabular">Reference {error.digest}</p>}
+          <div className="empty-actions">
+            <Link href="/dashboard" className="btn">
+              Go to dashboard
+            </Link>
+            <button type="button" onClick={reset} className="btn btn-primary">
+              Try again
+            </button>
+          </div>
+        </div>
+      </main>
     </div>
   )
 }

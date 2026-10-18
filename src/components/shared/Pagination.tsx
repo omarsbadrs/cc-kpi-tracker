@@ -1,33 +1,40 @@
 "use client"
 
+import { ChevronLeft, ChevronRight } from "lucide-react"
+
 interface PaginationProps {
   page: number
   totalPages: number
   onPageChange: (page: number) => void
 }
 
+/** A band footer for a list card: "Page 2 of 8" and previous/next. */
 export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
   if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center justify-between border-t border-border px-4 py-3">
-      <p className="text-sm text-foreground-muted">
+    <div className="pager">
+      <span className="tabular">
         Page {page} of {totalPages}
-      </p>
-      <div className="flex gap-2">
+      </span>
+      <div className="pager-actions">
         <button
+          type="button"
+          className="btn btn-sm"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground-secondary hover:bg-card-hover disabled:opacity-50"
         >
+          <ChevronLeft size={15} aria-hidden="true" />
           Previous
         </button>
         <button
+          type="button"
+          className="btn btn-sm"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground-secondary hover:bg-card-hover disabled:opacity-50"
         >
           Next
+          <ChevronRight size={15} aria-hidden="true" />
         </button>
       </div>
     </div>

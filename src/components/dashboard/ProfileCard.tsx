@@ -1,8 +1,11 @@
 "use client"
 
+import "@/styles/views/dashboard.css"
+import type { ReactNode } from "react"
 import { useSession } from "next-auth/react"
 import { useQuery } from "@tanstack/react-query"
 import { TIER_LABELS, ROLE_LABELS } from "@/lib/constants"
+import { UserAvatar } from "@/components/layout/UserMenu"
 import type { Role, Tier } from "@prisma/client"
 
 interface MeData {
@@ -17,6 +20,59 @@ interface MeData {
   graduationYear: number | null
   functionProject: string | null
   department: { name: string } | null
+}
+
+export interface ProfileFact {
+  label: string
+  value: ReactNode
+}
+
+/** "TEAM_LEAD" → "Team lead". */
+export function tierWord(tier: string): string {
+  const words = tier.toLowerCase().replace(/_/g, " ")
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/**
+ * Avatar + heading + one line, then label-over-value facts under a rule.
+ * Shared by the personal dashboard and a manager's member drill-down.
+ */
+export function ProfileSummary({
+  firstName,
+  lastName,
+  avatarUrl,
+  heading,
+  sub,
+  facts,
+}: {
+  firstName?: string | null
+  lastName?: string | null
+  avatarUrl?: string | null
+  heading: ReactNode
+  sub?: ReactNode
+  facts: ProfileFact[]
+}) {
+  return (
+    <section className="card profile-card" aria-label="Profile">
+      <div className="client-head">
+        <UserAvatar firstName={firstName} lastName={lastName} avatarUrl={avatarUrl} big />
+        <div>
+          <h2 className="profile-name">{heading}</h2>
+          {sub && <p className="profile-sub">{sub}</p>}
+        </div>
+      </div>
+      {facts.length > 0 && (
+        <dl className="kv-grid">
+          {facts.map((f) => (
+            <div key={f.label} className="kv">
+              <dt className="kv-label">{f.label}</dt>
+              <dd className="kv-value">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  )
 }
 
 export function ProfileCard({ periodName }: { periodName?: string }) {
@@ -42,67 +98,24 @@ export function ProfileCard({ periodName }: { periodName?: string }) {
   const functionProject = me?.functionProject
   const employeeId = me?.employeeId
   const graduationYear = me?.graduationYear
-  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+
+  const facts: ProfileFact[] = []
+  if (employeeId) facts.push({ label: "Employee ID", value: <span className="tabular">#{employeeId}</span> })
+  facts.push({ label: "Role", value: ROLE_LABELS[role] })
+  facts.push({ label: "Tier", value: tierWord(tier) })
+  if (email) facts.push({ label: "Email", value: email })
+  if (graduationYear) facts.push({ label: "Graduated", value: <span className="tabular">{graduationYear}</span> })
+  if (functionProject) facts.push({ label: "Function or project", value: functionProject })
+  if (periodName) facts.push({ label: "Period", value: periodName })
 
   return (
-    <div className="glass-card animate-card-in w-full p-5">
-      <div className="flex items-center gap-5">
-        {/* Avatar */}
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt={`${firstName} ${lastName}`}
-            className="h-16 w-16 rounded-2xl object-cover ring-2 ring-border"
-          />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/80 to-purple-600/80 text-xl font-bold text-white ring-2 ring-border">
-            {initials}
-          </div>
-        )}
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-foreground tracking-tight truncate">
-            {firstName} {lastName}
-          </h1>
-          <p className="text-sm text-foreground-muted mt-0.5 truncate">{jobTitle}</p>
-
-          {/* Badges */}
-          <div className="flex flex-wrap items-center gap-2 mt-2.5">
-            {employeeId && (
-              <span className="profile-badge profile-badge-id">
-                #{employeeId}
-              </span>
-            )}
-            <span className="profile-badge profile-badge-role">
-              {ROLE_LABELS[role]}
-            </span>
-            <span className="profile-badge profile-badge-tier">
-              {tier.replace("_", " ")}
-            </span>
-            {email && (
-              <span className="profile-badge profile-badge-dept">
-                {email}
-              </span>
-            )}
-            {graduationYear && (
-              <span className="profile-badge profile-badge-period">
-                Grad {graduationYear}
-              </span>
-            )}
-            {functionProject && (
-              <span className="profile-badge profile-badge-dept">
-                {functionProject}
-              </span>
-            )}
-            {periodName && (
-              <span className="profile-badge profile-badge-period">
-                {periodName}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <ProfileSummary
+      firstName={firstName}
+      lastName={lastName}
+      avatarUrl={avatarUrl}
+      heading={`${firstName} ${lastName}`.trim()}
+      sub={jobTitle}
+      facts={facts}
+    />
   )
 }

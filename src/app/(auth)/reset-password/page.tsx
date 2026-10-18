@@ -3,6 +3,9 @@
 import { Suspense, useState, type FormEvent } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { AlertCircle, Check, Circle, Link2Off } from "lucide-react"
+import { Field } from "@/components/ui/Field"
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -16,17 +19,32 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="rounded-2xl border border-border bg-background-card p-8 text-center shadow-lg">
-        <p className="text-foreground-muted">Invalid or missing reset token.</p>
-        <Link href="/login" className="mt-4 inline-block text-sm text-blue-500 hover:text-blue-400">
-          Back to login
-        </Link>
+      <div className="empty" style={{ paddingBlock: "8px 4px" }}>
+        <Link2Off size={22} strokeWidth={1.6} aria-hidden="true" className="empty-icon" />
+        <h1>This reset link is not valid</h1>
+        <p>The reset token is invalid or missing. Ask for a new link from the sign-in page.</p>
+        <div className="empty-actions">
+          <Link href="/login" className="btn">
+            Back to sign in
+          </Link>
+        </div>
       </div>
     )
   }
 
+  // Shown as a quiet checklist; the server enforces the same rules.
+  const rules = [
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "One uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "One lowercase letter", met: /[a-z]/.test(password) },
+    { label: "One number", met: /[0-9]/.test(password) },
+    { label: "One special character", met: /[^A-Za-z0-9]/.test(password) },
+  ]
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    // Busy, not unavailable: the button keeps focus, so guard a second run.
+    if (loading) return
     setError("")
 
     if (password !== confirmPassword) {
@@ -59,25 +77,23 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-background-card p-8 shadow-lg">
-      <div className="mb-6 text-center">
-        <h1 className="text-xl font-bold text-foreground">Set New Password</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          Enter your new password below
-        </p>
+    <>
+      <div className="text-center">
+        <h1 className="auth-title">Set a new password</h1>
+        <p className="auth-sub">Enter your new password below</p>
       </div>
 
       {error && (
-        <div role="alert" className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
+        <div className="sample-banner offline-banner" role="alert">
+          <span className="sample-banner-ic">
+            <AlertCircle size={14} strokeWidth={1.8} aria-hidden="true" />
+          </span>
+          <span className="grow">{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-foreground-secondary">
-            New Password
-          </label>
+      <form onSubmit={handleSubmit}>
+        <Field label="New password" htmlFor="password">
           <input
             id="password"
             type="password"
@@ -85,43 +101,60 @@ function ResetPasswordForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
-            className="w-full rounded-lg border border-border bg-input px-4 py-2.5 text-sm text-foreground placeholder-foreground-muted outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            autoComplete="new-password"
+            aria-describedby="password-rules"
+            className="input"
           />
-        </div>
+          <ul id="password-rules" className="rule-list" aria-label="Password rules">
+            {rules.map((rule) => (
+              <li key={rule.label} className={rule.met ? "met" : undefined}>
+                {rule.met ? (
+                  <Check size={13} strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <Circle size={11} strokeWidth={2} aria-hidden="true" />
+                )}
+                <span>
+                  {rule.label}
+                  <span className="sr-only">{rule.met ? ", met" : ", not met yet"}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Field>
 
-        <div>
-          <label htmlFor="confirmPassword" className="mb-1.5 block text-sm font-medium text-foreground-secondary">
-            Confirm Password
-          </label>
+        <Field label="Confirm password" htmlFor="confirmPassword">
           <input
             id="confirmPassword"
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="w-full rounded-lg border border-border bg-input px-4 py-2.5 text-sm text-foreground placeholder-foreground-muted outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            autoComplete="new-password"
+            className="input"
           />
-        </div>
+        </Field>
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          className="btn btn-primary btn-block auth-submit mt-1"
+          aria-disabled={loading || undefined}
         >
-          {loading ? "Resetting..." : "Reset Password"}
+          {loading ? "Resetting…" : "Reset password"}
         </button>
+
+        <p className="auth-note">
+          <Link href="/login" className="card-link">
+            Back to sign in
+          </Link>
+        </p>
       </form>
-    </div>
+    </>
   )
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={
-      <div className="rounded-2xl border border-border bg-background-card p-8 text-center shadow-lg">
-        <p className="text-foreground-muted">Loading...</p>
-      </div>
-    }>
+    <Suspense fallback={<LoadingSpinner />}>
       <ResetPasswordForm />
     </Suspense>
   )

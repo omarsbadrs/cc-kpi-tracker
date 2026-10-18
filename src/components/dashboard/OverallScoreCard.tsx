@@ -1,6 +1,9 @@
 "use client"
 
+import "@/styles/views/dashboard.css"
 import { APPRAISAL_BANDS } from "@/lib/constants"
+import { BandChip } from "@/components/ui/StatusChip"
+import { ScoreGauge, distanceToNextBand } from "./ScoreGauge"
 import type { AppraisalBand } from "@prisma/client"
 
 interface OverallScoreCardProps {
@@ -9,60 +12,41 @@ interface OverallScoreCardProps {
   previousScore?: number
 }
 
+/** Standalone score card. The scorecard pages use ScorecardHero instead. */
 export function OverallScoreCard({ score, band, previousScore }: OverallScoreCardProps) {
   const bandInfo = APPRAISAL_BANDS[band]
-  const radius = 68
-  const circumference = 2 * Math.PI * radius
-  const progress = (score / 100) * circumference
   const change = previousScore !== undefined ? score - previousScore : undefined
+  const toNext = distanceToNextBand(score, band)
 
   return (
-    <div className="glass-card animate-card-in p-6">
-      <p className="label-xs mb-5">Overall Score</p>
-
-      <div className="flex items-center gap-6">
-        {/* Gauge */}
-        <div className="relative">
-          <svg width="156" height="156" viewBox="0 0 156 156" className="-rotate-90">
-            <circle
-              cx="78" cy="78" r={radius}
-              fill="none"
-              strokeWidth="7"
-              className="stroke-border"
-            />
-            <circle
-              cx="78" cy="78" r={radius}
-              fill="none"
-              stroke={bandInfo.color}
-              strokeWidth="7"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference - progress}
-              strokeLinecap="round"
-              className="transition-all duration-1000"
-              style={{ filter: `drop-shadow(0 0 6px ${bandInfo.color}40)` }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="metric-xl">{Math.round(score)}</span>
-            <span className="text-xs text-foreground-muted mt-0.5">/ 100</span>
-          </div>
-        </div>
-
-        {/* Info */}
-        <div>
-          <span
-            className="pill"
-            style={{ background: bandInfo.color + "15", color: bandInfo.color, borderColor: bandInfo.color + "25" }}
-          >
-            {bandInfo.label}
+    <section className="card" aria-labelledby="overall-score-title">
+      <div className="card-head">
+        <h2 className="card-title" id="overall-score-title">
+          Overall score
+        </h2>
+      </div>
+      <div className="score-card-body">
+        <ScoreGauge
+          score={score}
+          band={band}
+          size={124}
+          stroke={8}
+          label={`Overall score: ${Math.round(score)} out of 100, ${bandInfo.label}`}
+        />
+        <div className="score-card-facts">
+          <BandChip band={band} />
+          <span className="tabular">
+            Band {bandInfo.min}–{bandInfo.max}
+            {toNext ? ` · ${toNext}` : ""}
           </span>
           {change !== undefined && (
-            <p className={`mt-3 text-sm font-medium ${change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {change >= 0 ? "+" : ""}{change.toFixed(1)} from last period
-            </p>
+            <span className={`score-change ${change >= 0 ? "text-ok" : "text-bad"}`}>
+              {change >= 0 ? "+" : "−"}
+              {Math.abs(change).toFixed(1)} from last period
+            </span>
           )}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

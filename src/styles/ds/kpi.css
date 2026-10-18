@@ -1,0 +1,1115 @@
+/* KPI tracker layer on top of the invoicing design system.
+
+   Everything here follows the system's ten rules: rules not fills, status as
+   dot + word, one accent, tabular numbers. What the invoicing app never had —
+   six pillars, a 0–5 score, an appraisal band, wide data tables — is drawn in
+   the same language rather than in a second one. */
+
+/* ---------- Tokens ---------- */
+
+:root {
+  /* Pillar series. Chart fills and 8px marks only, never text: each holds
+     3:1 on its theme's surface (A 4.05, B 5.53, C 4.37, D 5.31, E 4.92,
+     F 4.32 on white), and every mark is paired with the pillar's letter. */
+  --pillar-a: #2f8f57;
+  --pillar-b: #3a63c8;
+  --pillar-c: #a86c00;
+  --pillar-d: #7a55c7;
+  --pillar-e: #c4453f;
+  --pillar-f: #1f8597;
+
+  /* Tracks behind meters and gauges: a shade off the surface, not a rule. */
+  --track: var(--surface-2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --pillar-a: #5cc287;
+    --pillar-b: #86a0f5;
+    --pillar-c: #d9a842;
+    --pillar-d: #b49af0;
+    --pillar-e: #ef7676;
+    --pillar-f: #5fc1d1;
+  }
+}
+
+:root[data-theme="dark"] {
+  --pillar-a: #5cc287;
+  --pillar-b: #86a0f5;
+  --pillar-c: #d9a842;
+  --pillar-d: #b49af0;
+  --pillar-e: #ef7676;
+  --pillar-f: #5fc1d1;
+}
+
+/* A pillar class sets --pc for any mark inside it to pick up. */
+.pillar-A { --pc: var(--pillar-a); }
+.pillar-B { --pc: var(--pillar-b); }
+.pillar-C { --pc: var(--pillar-c); }
+.pillar-D { --pc: var(--pillar-d); }
+.pillar-E { --pc: var(--pillar-e); }
+.pillar-F { --pc: var(--pillar-f); }
+
+/* ---------- Shell additions ---------- */
+
+/* The company wordmark (420×120) stands in for the app icon. One file per
+   theme, swapped by the stamped theme so it never flashes the wrong one. */
+.brand-logo {
+  display: block;
+  flex: none;
+  height: 24px;
+  width: auto;
+}
+
+.brand-logo-dark {
+  display: none;
+}
+
+[data-theme="dark"] .brand-logo-light {
+  display: none;
+}
+
+[data-theme="dark"] .brand-logo-dark {
+  display: block;
+}
+
+/* The wordmark stands alone in the sidebar, so it can be a little larger. */
+.sidebar .brand .brand-logo {
+  height: 30px;
+}
+
+.brand-spacer {
+  flex: 1;
+}
+
+/* ---------- Scrollbars ----------
+   A slim pill floating in a clear track: no arrows, no gutter fill. It sits
+   quiet at --hairline-strong and lights up in the brand red when grabbed or
+   hovered, so it reads as part of the interface rather than the OS. */
+/* Firefox only: Chromium drops every ::-webkit-scrollbar rule below as soon
+   as the standard properties are set, so they are kept away from it. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* The 3px transparent border, clipped out, makes the 10px slot a 4px pill
+   with air around it; on hover it widens to fill more of the slot. */
+::-webkit-scrollbar-thumb {
+  background-color: var(--hairline-strong);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: var(--r-full);
+  min-height: 40px;
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--accent);
+  border-width: 2px;
+}
+
+.side-credit {
+  padding: 8px 8px 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* Section headings fold their section. Same type as the plain label; the
+   chevron turns to say which way it will go. */
+.nav-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 24px;
+  border-radius: var(--r-sm);
+  text-align: start;
+  transition: color 0.12s;
+}
+
+.nav-group-toggle:hover {
+  color: var(--ink);
+}
+
+.nav-group-toggle:focus-visible {
+  outline-offset: -2px;
+}
+
+.nav-group-toggle > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-group-chev {
+  flex: none;
+  color: var(--ink-3);
+  transition: transform 0.18s var(--ease-spring);
+}
+
+.nav-group-toggle[aria-expanded="false"] .nav-group-chev {
+  transform: rotate(-90deg);
+}
+
+[dir="rtl"] .nav-group-toggle[aria-expanded="false"] .nav-group-chev {
+  transform: rotate(90deg);
+}
+
+/* A folded section that holds the current page shows the accent dot. */
+.nav-group-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+}
+
+.nav-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* ---------- Collapsed sidebar: a 64px icon rail (desktop) ---------- */
+
+@media (min-width: 900px) {
+  .shell {
+    transition: grid-template-columns 0.22s var(--ease-spring);
+  }
+
+  :root[data-sidebar="collapsed"] .shell {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar {
+    padding: 12px 8px;
+  }
+
+  /* The rail keeps the two buttons, one above the other. */
+  :root[data-sidebar="collapsed"] .brand {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 0 10px;
+  }
+
+  :root[data-sidebar="collapsed"] .sidebar .brand .brand-logo,
+  :root[data-sidebar="collapsed"] .brand .brand-spacer,
+  :root[data-sidebar="collapsed"] .side-account-main,
+  :root[data-sidebar="collapsed"] .nav-group-toggle,
+  :root[data-sidebar="collapsed"] .side-credit {
+    display: none;
+  }
+
+  :root[data-sidebar="collapsed"] .side-account {
+    justify-content: center;
+    padding: 9px 0;
+  }
+
+  /* Sections are told apart by a rule once their headings are gone. */
+  :root[data-sidebar="collapsed"] .nav-group + .nav-group {
+    padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  :root[data-sidebar="collapsed"] .nav-item {
+    justify-content: center;
+    min-height: 38px;
+    padding: 0;
+  }
+
+  /* The label leaves the layout but stays the link's accessible name. */
+  :root[data-sidebar="collapsed"] .nav-item > span:first-of-type {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  :root[data-sidebar="collapsed"] .nav-item .nav-badge {
+    position: absolute;
+    top: 3px;
+    inset-inline-end: 6px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    font-size: 10px;
+  }
+}
+
+.settings-row .grow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Sections of the mobile More sheet. */
+.more-group + .more-group {
+  margin-top: 16px;
+}
+
+.more-group-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+/* ---------- Pillar tag ---------- */
+
+/* The pillar's letter on a tint of its colour. The letter is ink, so it
+   reads at full contrast whatever the hue; the colour only identifies. */
+.pillar-tag {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-xs);
+  background: var(--band);
+  background: color-mix(in srgb, var(--pc, var(--ink-3)) 14%, var(--surface));
+  border: 1px solid var(--hairline);
+  border-color: color-mix(in srgb, var(--pc, var(--ink-3)) 40%, var(--surface));
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.pillar-tag.big {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+}
+
+/* A bare dot of the pillar colour, always beside the pillar's name. */
+.pillar-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--pc, var(--ink-3));
+}
+
+/* ---------- Score badge (0–5) ---------- */
+
+/* The number is the signal; the tone only repeats it. Same shape as the
+   status chip's tint so the two sit together in a row. */
+.score-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  font-size: 12.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  background: var(--band);
+  background: color-mix(in srgb, currentcolor 10%, var(--surface));
+}
+
+.score-badge.empty {
+  color: var(--ink-3);
+  background: var(--band);
+  font-weight: 500;
+}
+
+/* Score tones: 5–4 on target, 3–2 short, 1–0 well short. */
+.score-5, .score-4 { color: var(--ok); }
+.score-3, .score-2 { color: var(--warn); }
+.score-1, .score-0 { color: var(--bad); }
+
+/* ---------- Meter ---------- */
+
+.meter {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pc, var(--series-1));
+  transition: width 0.5s var(--ease-spring);
+}
+
+.meter.thick {
+  height: 8px;
+}
+
+/* A target mark across the bar (the 80% "Strong" line). The meter clips, so
+   the mark is drawn as a gap in the fill's colour: a 2px stroke in ink. */
+.meter-wrap {
+  position: relative;
+}
+
+.meter-target {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-inline-start: -1px;
+  border-radius: 1px;
+  background: var(--ink-2);
+}
+
+/* A bigger avatar for a scorecard head. */
+.user-avatar.xl {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+/* ---------- Gauge (overall score) ---------- */
+
+.gauge {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.gauge svg {
+  transform: rotate(-90deg);
+}
+
+.gauge-track {
+  stroke: var(--track);
+}
+
+.gauge-fill {
+  stroke: var(--accent);
+  transition: stroke-dashoffset 0.8s var(--ease-spring);
+}
+
+.gauge-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-value {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge-of {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ---------- Data table ---------- */
+
+/* The aging table's rules, generalised: a head band, ruled rows, tabular
+   figures right-aligned. Wide tables scroll inside .table-scroll (focusable)
+   and never push the page sideways. */
+.table-scroll {
+  overflow-x: auto;
+  position: relative;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 9px 10px;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  padding-inline-start: 14px;
+}
+
+.data-table th:last-child,
+.data-table td:last-child {
+  padding-inline-end: 14px;
+}
+
+.data-table thead th {
+  font-size: 12.5px;
+  font-weight: 450;
+  color: var(--ink-3);
+  background: var(--band);
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.data-table tbody td,
+.data-table tbody th {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.data-table tbody tr:last-child td,
+.data-table tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.data-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.data-table tbody tr.clickable:hover,
+.data-table tbody tr.hover:hover {
+  background: var(--band);
+}
+
+.data-table tbody tr.clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* A group heading row inside a table (a pillar's KPIs, a team). */
+.data-table tbody tr.group-row th,
+.data-table tbody tr.group-row td {
+  background: var(--band);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.data-table .num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.data-table .muted {
+  color: var(--ink-3);
+}
+
+.data-table .nowrap {
+  white-space: nowrap;
+}
+
+/* The one column that may be long gives way; the figures never do. */
+.data-table .clip {
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Small text pieces ---------- */
+
+.kpi-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+.ink-2 {
+  color: var(--ink-2);
+}
+
+/* A label over a value inside a card: sentence case, never uppercase. */
+.kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kv-label {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.kv-value {
+  font-size: 14px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px 18px;
+}
+
+/* ---------- Popover menu ---------- */
+
+/* Floats, so it is one of the few things allowed a shadow. */
+.menu {
+  position: absolute;
+  z-index: 50;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 32px rgba(19, 20, 23, 0.14);
+  animation: menu-in 0.14s var(--ease-spring);
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.menu-head {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline);
+  margin: -4px -4px 4px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-size: 14px;
+  text-align: start;
+}
+
+.menu-item:hover {
+  background: var(--band);
+  color: var(--ink);
+}
+
+.menu-item.danger {
+  color: var(--critical);
+}
+
+/* ---------- Switch ---------- */
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  border: 1px solid var(--hairline-strong);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(19, 20, 23, 0.25);
+  transition: transform 0.18s var(--ease-spring);
+}
+
+.switch[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+}
+
+[dir="rtl"] .switch[aria-checked="true"]::after {
+  transform: translateX(-16px);
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- Theme switch ---------- */
+
+/* A track with both icons faint at its ends; the knob carries the theme in
+   use and slides over the other. */
+.theme-switch {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 56px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-full);
+  background: var(--band);
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink-3);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.theme-switch:hover {
+  border-color: var(--ink-3);
+}
+
+.theme-switch-knob {
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 3px rgba(19, 20, 23, 0.25);
+  transition: transform 0.2s var(--ease-spring);
+}
+
+.theme-switch[aria-checked="true"] .theme-switch-knob {
+  transform: translateX(26px);
+}
+
+[dir="rtl"] .theme-switch[aria-checked="true"] .theme-switch-knob {
+  transform: translateX(-26px);
+}
+
+/* ---------- Loading ---------- */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 40px 16px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-full);
+  border: 2px solid var(--hairline-strong);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Pagination ---------- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--hairline);
+  background: var(--band);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.pager-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- Pillar card (dashboard) ---------- */
+
+.pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: clip;
+  margin-bottom: 18px;
+}
+
+/* Three wide tiles a row, not six narrow ones: the pillar names are long
+   ("Attendance, reliability & professional conduct") and were cut to
+   "Attendance, Reliab…" at six across. */
+@media (min-width: 760px) {
+  .pillar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.pillar-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 15px 18px 16px;
+  background: var(--surface);
+  text-align: start;
+  color: var(--ink);
+  transition: background 0.12s;
+}
+
+button.pillar-tile:hover,
+a.pillar-tile:hover {
+  background: var(--band);
+}
+
+.pillar-tile[aria-pressed="true"],
+.pillar-tile.active {
+  background: var(--band);
+  box-shadow: inset 0 -2px 0 var(--pc, var(--accent));
+}
+
+.pillar-tile:focus-visible {
+  outline-offset: -2px;
+}
+
+.pillar-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pillar-tile-name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.3;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.pillar-tile-figures {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pillar-tile-value {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pillar-tile-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pillar-tile-sub {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Chart frame ---------- */
+
+/* Recharts draws its own SVG; these keep its text and grid on the tokens. */
+.chart {
+  width: 100%;
+  font-size: 12px;
+}
+
+.chart .recharts-cartesian-grid line {
+  stroke: var(--hairline);
+}
+
+.chart .recharts-text,
+.chart .recharts-cartesian-axis-tick-value {
+  fill: var(--ink-3);
+}
+
+.chart .recharts-cartesian-axis-line,
+.chart .recharts-cartesian-axis-tick-line {
+  stroke: var(--hairline-strong);
+}
+
+.chart .recharts-polar-grid-angle line,
+.chart .recharts-polar-grid-concentric polygon,
+.chart .recharts-polar-grid-concentric circle {
+  stroke: var(--hairline);
+}
+
+.chart .recharts-legend-item-text {
+  color: var(--ink-2) !important;
+}
+
+/* The tooltip floats, so it may carry a shadow. */
+.chart-tooltip {
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 28px rgba(19, 20, 23, 0.14);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.chart-tooltip-label {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip-row b {
+  margin-inline-start: auto;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- Grid helpers for dashboards ---------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 980px) {
+  .split { grid-template-columns: minmax(0, 1fr) 320px; }
+  .split.even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- Sign-in ---------- */
+
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--page);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 24px 24px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.auth-brand img {
+  height: 26px;
+  width: auto;
+}
+
+/* ---------- Legacy bridge ----------
+   Class names from the previous theme, redrawn in this system so nothing
+   reverts to glass while a screen is being converted. New markup should use
+   the system's own classes instead. */
+
+.glass-card,
+.glass-card-btn,
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+.glass-card-btn {
+  text-align: start;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.glass-card-btn:hover {
+  background: var(--band);
+  border-color: var(--hairline-strong);
+}
+
+.glass-inner {
+  background: var(--band);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.form-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+}
+
+.form-input::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+.form-input:hover {
+  border-color: var(--ink-3);
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+.label-xs {
+  font-size: 12.5px;
+  font-weight: 450;
+  color: var(--ink-3);
+}
+
+.section-label {
+  padding: 0 8px;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.metric-xl {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-lg {
+  font-size: 19px;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill,
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: var(--band);
+  border: 1px solid var(--hairline);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.progress-track {
+  height: 6px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--track);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.dropdown-menu {
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 32px rgba(19, 20, 23, 0.14);
+}
+
+.table-row {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.table-row:last-child {
+  border-bottom: 0;
+}
+
+.table-row:hover {
+  background: var(--band);
+}

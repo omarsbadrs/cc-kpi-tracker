@@ -136,9 +136,9 @@ export const GET = withAuth(async (req, { session }) => {
     approved, total,
   })).sort((a, b) => a.pillarCode.localeCompare(b.pillarCode))
 
-  // ── Top 10 performers ─────────────────────────────────────
+  // ── Top 10 and lowest 5 performers ────────────────────────
   const userMap = new Map(users.map((u) => [u.id, u]))
-  const topPerformers = overallSnaps
+  const ranked = overallSnaps
     .filter((s) => userMap.has(s.userId))
     .map((s) => ({
       userId: s.userId,
@@ -148,7 +148,9 @@ export const GET = withAuth(async (req, { session }) => {
       appraisalBand: s.appraisalBand,
     }))
     .sort((a, b) => b.overallScore - a.overallScore)
-    .slice(0, 10)
+  const topPerformers = ranked.slice(0, 10)
+  // The bottom of the same ranking, lowest first, never overlapping the top.
+  const lowestPerformers = ranked.slice(Math.max(10, ranked.length - 5)).reverse()
 
   // ── KPI score distribution (0–5) ─────────────────────────
   const scoreDist: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
@@ -215,6 +217,7 @@ export const GET = withAuth(async (req, { session }) => {
     pillarAverages,
     approvalByPillar,
     topPerformers,
+    lowestPerformers,
     scoreDistribution,
     scoreTrend,
   })

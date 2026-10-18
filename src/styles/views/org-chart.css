@@ -1,0 +1,214 @@
+/* Reporting-line trees (team members, admin org chart).
+
+   Drawn with rules, not fills: each person is a small ruled card on the
+   surface, and the lines between them are 1px --hairline-strong. The tree is
+   as wide as it needs to be and scrolls inside a focusable .table-scroll rail,
+   so it never widens the page. Connectors are pseudo-elements on the list
+   items, so they meet the card centres whatever the card or branch widths. */
+
+@layer components {
+  .org-tree {
+    width: max-content;
+    min-width: 100%;
+    padding: 20px 16px 22px;
+  }
+
+  .org-tree ul {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    padding: 20px 0 0;
+    list-style: none;
+  }
+
+  .org-tree li {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 8px 0;
+    list-style: none;
+  }
+
+  /* Each child draws half of the horizontal bar on either side of its own
+     centre, plus the drop to its card. */
+  .org-tree li::before,
+  .org-tree li::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 20px;
+    border-top: 1px solid var(--hairline-strong);
+  }
+
+  .org-tree li::before {
+    inset-inline-end: 50%;
+  }
+
+  .org-tree li::after {
+    inset-inline-start: 50%;
+    border-inline-start: 1px solid var(--hairline-strong);
+  }
+
+  /* The bar stops at the first and last child's centre. */
+  .org-tree li:first-child::before {
+    border-top: 0;
+  }
+
+  .org-tree li:last-child::after {
+    border-top: 0;
+  }
+
+  /* The drop from a parent card to the bar below it. */
+  .org-tree ul ul::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    inset-inline-start: 50%;
+    height: 20px;
+    border-inline-start: 1px solid var(--hairline-strong);
+  }
+
+  /* Several roots sit side by side with no bar joining them. */
+  .org-tree > ul {
+    gap: 24px;
+    padding-top: 0;
+  }
+
+  .org-tree > ul > li {
+    padding-top: 0;
+  }
+
+  .org-tree > ul > li::before,
+  .org-tree > ul > li::after {
+    display: none;
+  }
+
+  /* ---------- Person card ---------- */
+
+  .org-node {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 224px;
+    padding: 10px 12px 12px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    color: inherit;
+    text-align: start;
+    transition: border-color 0.13s, background 0.13s;
+  }
+
+  a.org-node:hover {
+    border-color: var(--hairline-strong);
+    background: var(--band);
+  }
+
+  a.org-node:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* A search match: the accent rule and the focus halo, not a fill. */
+  .org-node.match {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-wash);
+  }
+
+  /* A position with nobody in it yet. */
+  .org-node.vacant {
+    border-style: dashed;
+    border-color: var(--hairline-strong);
+  }
+
+  .org-node-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .org-node-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .org-node-name {
+    font-size: 14px;
+    font-weight: 550;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-node-sub {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-node-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .org-node-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  .org-node-meta svg {
+    flex: none;
+  }
+
+  .org-node-meta > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-node-count {
+    font-size: 12px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Sortable table heads ---------- */
+
+  .sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: inherit;
+    font: inherit;
+  }
+
+  .sort-btn:hover {
+    color: var(--ink);
+  }
+
+  .sort-btn svg {
+    flex: none;
+  }
+
+  /* People listed as pills (unplaced, unassigned). */
+  .person-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}

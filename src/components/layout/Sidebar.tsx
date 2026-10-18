@@ -2,218 +2,184 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useSession } from "next-auth/react"
-import { cn } from "@/lib/utils"
-import type { Role } from "@prisma/client"
-import {
-  LayoutDashboard,
-  ClipboardList,
-  Bell,
-  User,
-  Users,
-  UsersRound,
-  FileText,
-  ShieldCheck,
-  Library,
-  Target,
-  CalendarDays,
-  Settings,
-  Download,
-  Network,
-  ClipboardCheck,
-  UserX,
-  type LucideIcon,
-} from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { signOut, useSession } from "next-auth/react"
+import { ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react"
+import { navForRole, isActive } from "./nav"
+import { ThemeToggle } from "./ThemeToggle"
+import { useUnreadCount } from "@/hooks/useNotifications"
+import { UserAvatar } from "./UserMenu"
+import { NAV_GROUPS_STORAGE_KEY, SIDEBAR_STORAGE_KEY } from "@/lib/theme"
 
-interface NavItem {
-  label: string
-  href: string
-  icon: LucideIcon
-  roles: Role[]
+function readClosedGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(NAV_GROUPS_STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+  } catch {
+    return {}
+  }
 }
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["USER", "MANAGER", "ADMIN"] },
-  { label: "My KPIs", href: "/kpis", icon: ClipboardList, roles: ["USER", "MANAGER", "ADMIN"] },
-  { label: "Notifications", href: "/notifications", icon: Bell, roles: ["USER", "MANAGER", "ADMIN"] },
-  { label: "Profile", href: "/profile", icon: User, roles: ["USER", "MANAGER", "ADMIN"] },
-  { label: "Team Overview", href: "/manager/team", icon: Users, roles: ["MANAGER", "ADMIN"] },
-  { label: "Team Members", href: "/manager/members", icon: UsersRound, roles: ["MANAGER", "ADMIN"] },
-  { label: "Review Queue", href: "/manager/review", icon: ClipboardCheck, roles: ["MANAGER", "ADMIN"] },
-  { label: "Reports", href: "/manager/reports", icon: FileText, roles: ["MANAGER", "ADMIN"] },
-  { label: "Org Chart", href: "/admin/org-chart", icon: Network, roles: ["ADMIN"] },
-  { label: "Users", href: "/admin/users", icon: ShieldCheck, roles: ["ADMIN"] },
-  { label: "KPI Library", href: "/kpi-library", icon: Library, roles: ["USER", "MANAGER", "ADMIN"] },
-  { label: "Assignments", href: "/admin/assignments", icon: Target, roles: ["ADMIN"] },
-  { label: "Periods", href: "/admin/periods", icon: CalendarDays, roles: ["ADMIN"] },
-  { label: "Scoring", href: "/admin/scoring", icon: Settings, roles: ["ADMIN"] },
-  { label: "Import", href: "/admin/import", icon: Download, roles: ["ADMIN"] },
-  { label: "Inactive Users", href: "/admin/inactive-users", icon: UserX, roles: ["ADMIN"] },
-]
-
-export function Sidebar({
-  isOpen,
-  onClose,
-  collapsed,
-  onToggleCollapse,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  collapsed: boolean
-  onToggleCollapse: () => void
-}) {
+/**
+ * Desktop navigation panel (≥ 900px). Phones use the TabBar instead.
+ * It folds to a 64px icon rail (state stamped on <html data-sidebar> before
+ * paint), and each section folds on its own heading.
+ */
+export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
-  const role = session?.user?.role
+  const user = session?.user
+  const groups = navForRole(user?.role)
+  const { data: unread } = useUnreadCount()
+  const unreadCount = typeof unread === "number" ? unread : 0
 
-  const filteredItems = navItems.filter(
-    (item) => role && item.roles.includes(role)
-  )
+  const [collapsed, setCollapsed] = useState(false)
+  const [closed, setClosed] = useState<Record<string, boolean>>({})
 
-  const mainItems = filteredItems.filter(
-    (i) => !i.href.startsWith("/manager") && !i.href.startsWith("/admin")
-  )
-  const managerItems = filteredItems.filter((i) => i.href.startsWith("/manager"))
-  const adminItems = filteredItems.filter((i) => i.href.startsWith("/admin"))
+  useEffect(() => {
+    setCollapsed(document.documentElement.getAttribute("data-sidebar") === "collapsed")
+    setClosed(readClosedGroups())
+  }, [])
+
+  const toggleSidebar = useCallback(() => {
+    setCollapsed((was) => {
+      const next = !was
+      document.documentElement.setAttribute("data-sidebar", next ? "collapsed" : "expanded")
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "collapsed" : "expanded")
+      } catch {
+        // Storage blocked: the choice lasts for this page only.
+      }
+      return next
+    })
+  }, [])
+
+  const toggleGroup = useCallback((id: string) => {
+    setClosed((prev) => {
+      const next = { ...prev, [id]: !prev[id] }
+      try {
+        localStorage.setItem(NAV_GROUPS_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // Storage blocked: fine, it just won't be remembered.
+      }
+      return next
+    })
+  }, [])
+
+  // Arriving on a page inside a folded section opens that section, so the
+  // "you are here" mark is never hidden.
+  useEffect(() => {
+    const holder = groups.find((g) => g.items.some((i) => isActive(pathname, i.href)))
+    if (holder && closed[holder.id]) toggleGroup(holder.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  const collapseLabel = collapsed ? "Expand sidebar" : "Collapse sidebar"
 
   return (
-    <>
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
-          onClick={onClose}
-        />
+    <aside className="sidebar" aria-label="Main">
+      <div className="brand">
+        <img src="/logo-light.svg" alt="Elsewedy Electric PSP" className="brand-logo brand-logo-light" />
+        <img src="/logo.svg" alt="" aria-hidden="true" className="brand-logo brand-logo-dark" />
+        <span className="brand-spacer" />
+        <ThemeToggle />
+        <button
+          type="button"
+          className="icon-btn sidebar-toggle"
+          onClick={toggleSidebar}
+          aria-label={collapseLabel}
+          title={collapseLabel}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={17} strokeWidth={1.7} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={17} strokeWidth={1.7} aria-hidden="true" />
+          )}
+        </button>
+      </div>
+
+      {user && (
+        <div className="side-account" title={collapsed ? `${user.firstName} ${user.lastName}` : undefined}>
+          <UserAvatar firstName={user.firstName} lastName={user.lastName} avatarUrl={user.avatarUrl} />
+          <div className="side-account-main">
+            <span className="name">
+              {user.firstName} {user.lastName}
+            </span>
+            <span className="sub">{user.email}</span>
+          </div>
+        </div>
       )}
 
-      <aside
-        className={cn(
-          "ca-sidebar fixed top-0 left-0 z-50 flex h-full flex-col transition-all lg:relative lg:translate-x-0",
-          collapsed ? "w-[68px]" : "w-56",
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        )}
-      >
-        {/* Collapse toggle */}
-        <div className="absolute -right-3.5 top-[7.25rem] hidden lg:block" style={{ zIndex: 9999 }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
-            className="sidebar-collapse-btn h-7 w-7"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              {collapsed ? (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              )}
-            </svg>
-          </button>
-        </div>
-
-        {/* Logo */}
-        <div className={cn(
-          "flex h-16 items-center justify-center border-b border-border",
-          collapsed ? "px-2" : "px-4"
-        )}>
-          <img
-            src="/logo.svg"
-            alt="Elsewedy Electric PSP"
-            className={cn("hidden dark:block", collapsed ? "h-5 w-auto" : "h-7 w-auto")}
-          />
-          <img
-            src="/logo-light.svg"
-            alt="Elsewedy Electric PSP"
-            className={cn("block dark:hidden", collapsed ? "h-5 w-auto" : "h-7 w-auto")}
-          />
-        </div>
-
-        {/* Navigation */}
-        <nav className={cn("flex-1 overflow-y-auto py-3", collapsed ? "px-2" : "px-2.5")}>
-          <NavGroup items={mainItems} pathname={pathname} onClose={onClose} collapsed={collapsed} />
-
-          {managerItems.length > 0 && (
-            <>
-              {!collapsed && <div className="section-label mt-5 mb-1.5">Team</div>}
-              {collapsed && <div className="my-2.5 mx-1 border-t border-border" />}
-              <NavGroup items={managerItems} pathname={pathname} onClose={onClose} collapsed={collapsed} />
-            </>
-          )}
-
-          {adminItems.length > 0 && (
-            <>
-              {!collapsed && <div className="section-label mt-5 mb-1.5">Admin</div>}
-              {collapsed && <div className="my-2.5 mx-1 border-t border-border" />}
-              <NavGroup items={adminItems} pathname={pathname} onClose={onClose} collapsed={collapsed} />
-            </>
-          )}
-        </nav>
-
-        {/* Footer */}
-        <div className="border-t border-border p-3 text-center">
-          {collapsed ? (
-            <p className="text-[9px] font-semibold text-foreground-muted/50" title="Cost Control Dept. — by Omar Badr">OB</p>
-          ) : (
-            <>
-              <p className="text-[11px] text-foreground-muted">Cost Control Dept.</p>
-              <p className="mt-1 text-[11px] font-semibold text-foreground-secondary">Omar Badr</p>
-            </>
-          )}
-        </div>
-      </aside>
-    </>
-  )
-}
-
-function NavGroup({
-  items,
-  pathname,
-  onClose,
-  collapsed,
-}: {
-  items: NavItem[]
-  pathname: string
-  onClose: () => void
-  collapsed: boolean
-}) {
-  return (
-    <ul className={cn("space-y-1", collapsed && "flex flex-col items-center")}>
-      {items.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-        const Icon = item.icon
-
-        if (collapsed) {
+      <nav className="side-nav" aria-label="Sections">
+        {groups.map((group) => {
+          const isClosed = !collapsed && !!closed[group.id]
+          const holdsActive = group.items.some((i) => isActive(pathname, i.href))
+          const listId = `nav-list-${group.id}`
           return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                onClick={onClose}
-                title={item.label}
-                className={cn(
-                  "ca-sidebar-icon",
-                  isActive && "ca-sidebar-icon-active"
-                )}
+            <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}>
+              <button
+                type="button"
+                id={`nav-${group.id}`}
+                className="nav-group-label nav-group-toggle"
+                aria-expanded={!isClosed}
+                aria-controls={listId}
+                onClick={() => toggleGroup(group.id)}
               >
-                <Icon className="h-[18px] w-[18px]" strokeWidth={1.7} />
-              </Link>
-            </li>
+                <span>{group.label}</span>
+                {isClosed && holdsActive && <span className="nav-group-dot" aria-label="Contains the current page" />}
+                <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" className="nav-group-chev" />
+              </button>
+              <div id={listId} className="nav-group-items" hidden={isClosed}>
+                {group.items.map((item) => {
+                  const active = isActive(pathname, item.href)
+                  const Icon = item.icon
+                  const badge = item.href === "/notifications" && unreadCount > 0 ? unreadCount : 0
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`nav-item${active ? " active" : ""}`}
+                      aria-current={active ? "page" : undefined}
+                      title={collapsed ? item.label : undefined}
+                    >
+                      <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
+                      <span>{item.label}</span>
+                      {badge > 0 && (
+                        <span className="nav-badge" role="img" aria-label={`${badge} unread`} title={`${badge} unread`}>
+                          {badge > 9 ? "9+" : badge}
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
           )
-        }
+        })}
+      </nav>
 
-        return (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              onClick={onClose}
-              className={cn(
-                "ca-sidebar-link",
-                isActive && "ca-sidebar-link-active"
-              )}
-            >
-              <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.7} />
-              {item.label}
-            </Link>
-          </li>
-        )
-      })}
-    </ul>
+      <div className="side-foot">
+        <Link
+          href="/profile"
+          className={`nav-item${isActive(pathname, "/profile") ? " active" : ""}`}
+          aria-current={isActive(pathname, "/profile") ? "page" : undefined}
+          title={collapsed ? "Profile" : undefined}
+        >
+          <UserRound size={17} strokeWidth={1.7} aria-hidden="true" />
+          <span>Profile</span>
+        </Link>
+        <button
+          type="button"
+          className="nav-item"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          title={collapsed ? "Sign out" : undefined}
+        >
+          <LogOut size={17} strokeWidth={1.7} aria-hidden="true" />
+          <span>Sign out</span>
+        </button>
+        <p className="side-credit">Cost Control Dept. · Omar Badr</p>
+      </div>
+    </aside>
   )
 }

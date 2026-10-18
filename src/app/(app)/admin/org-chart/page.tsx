@@ -2,11 +2,16 @@
 
 import { useState, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { PageHeader } from "@/components/shared/PageHeader"
+import { Download, Plus, RotateCcw, Save, X } from "lucide-react"
+import { PageHead } from "@/components/ui/PageHead"
+import { SelectWrap } from "@/components/ui/Field"
+import { StatusChip, TagPill } from "@/components/ui/StatusChip"
+import { useToast } from "@/components/ui/Toast"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
+import { UserAvatar } from "@/components/layout/UserMenu"
 import { TIER_LABELS, TIER_SHORT } from "@/lib/constants"
-import { Plus, X, Save, RotateCcw, Users, Download } from "lucide-react"
 import { useExportOrgChartPdf } from "@/hooks/useExportOrgChartPdf"
+import "@/styles/views/org-chart.css"
 
 // ─────────────────────────────────────
 // Types
@@ -108,6 +113,7 @@ function removeNode(root: OrgNode, nodeId: string): OrgNode {
 
 export default function OrgChartPage() {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const { exportPdf, isExporting } = useExportOrgChartPdf()
 
   const { data, isLoading } = useQuery({
@@ -159,11 +165,15 @@ export default function OrgChartPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-hierarchy"] })
       setHasChanges(false)
+      toast("Org chart saved")
+    },
+    onError: (error: Error) => {
+      toast(`Could not save the org chart. ${error.message}`.replace(/\.$/, ""), { icon: "alert" })
     },
   })
 
   const handleSave = () => {
-    if (!tree) return
+    if (!tree || saveMutation.isPending) return
     const assignments = flattenAssignments(tree, null)
     saveMutation.mutate(assignments)
   }
@@ -172,6 +182,15 @@ export default function OrgChartPage() {
     if (allUsers.length > 0) {
       setTree(buildTreeFromUsers(allUsers))
       setHasChanges(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (isExporting) return
+    try {
+      await exportPdf("admin-org-chart", "org-chart.pdf")
+    } catch {
+      toast("Could not export the PDF. Try again", { icon: "alert" })
     }
   }
 
@@ -196,96 +215,90 @@ export default function OrgChartPage() {
 
   if (isLoading || !tree) return <LoadingSpinner />
 
-  const unplacedCount = allUsers.filter(u => !usedIds.has(u.id) && u.role !== "ADMIN").length
+  const unplaced = allUsers.filter(u => !usedIds.has(u.id) && u.role !== "ADMIN")
+  const unplacedCount = unplaced.length
+  const isSaving = saveMutation.isPending
 
   return (
-    <div>
-      <PageHeader
-        title="Org Chart"
-        description="Build the reporting hierarchy by selecting users for each position"
-        action={
-          <div className="flex items-center gap-2">
-            {unplacedCount > 0 && (
-              <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
-                {unplacedCount} unplaced
-              </span>
-            )}
+    <>
+      <PageHead
+        title="Org chart"
+        sub="Build the reporting hierarchy by choosing a person for each position"
+        titleAside={
+          unplacedCount > 0 ? <StatusChip tone="warn">{unplacedCount} unplaced</StatusChip> : undefined
+        }
+        actions={
+          <>
             <button
-              onClick={() => exportPdf("admin-org-chart", "org-chart.pdf")}
-              disabled={isExporting}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-40"
+              type="button"
+              className="btn"
+              onClick={handleExport}
+              aria-disabled={isExporting ? "true" : undefined}
             >
-              <Download className="h-4 w-4" />
+              <Download size={16} strokeWidth={1.7} aria-hidden="true" />
               {isExporting ? "Exporting…" : "Export PDF"}
             </button>
             {hasChanges && (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground-muted transition-colors hover:bg-card-hover"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
+              <button type="button" className="btn btn-ghost" onClick={handleReset}>
+                <RotateCcw size={15} strokeWidth={1.7} aria-hidden="true" />
                 Reset
               </button>
             )}
             <button
+              type="button"
+              className="btn btn-primary"
               onClick={handleSave}
-              disabled={!hasChanges || saveMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+              disabled={!hasChanges && !isSaving}
+              title={!hasChanges && !isSaving ? "No changes to save" : undefined}
+              aria-disabled={isSaving ? "true" : undefined}
             >
-              <Save className="h-4 w-4" />
-              {saveMutation.isPending ? "Saving..." : "Save Chart"}
+              <Save size={16} strokeWidth={1.8} aria-hidden="true" />
+              {isSaving ? "Saving…" : "Save chart"}
             </button>
-          </div>
+          </>
         }
       />
 
-      {saveMutation.isError && (
-        <div className="mb-4 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
-          {saveMutation.error?.message}
-        </div>
-      )}
-
-      {saveMutation.isSuccess && (
-        <div className="mb-4 rounded-lg bg-green-500/10 px-4 py-2 text-sm text-green-400">
-          Org chart saved successfully.
-        </div>
-      )}
-
       {/* Chart */}
-      <div id="admin-org-chart" className="overflow-x-auto rounded-xl border border-card-border bg-card-bg p-8">
-        <div className="flex min-w-max flex-col items-center">
-          <OrgNodeCard
-            node={tree}
-            allUsers={allUsers}
-            usedIds={usedIds}
-            isRoot
-            onSetUser={setUserId}
-            onAddChild={addChild}
-            onRemove={removeNodeById}
-          />
+      <section className="card list-card">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Org chart">
+          <div id="admin-org-chart" className="org-tree">
+            <ul>
+              <OrgNodeCard
+                node={tree}
+                allUsers={allUsers}
+                usedIds={usedIds}
+                isRoot
+                onSetUser={setUserId}
+                onAddChild={addChild}
+                onRemove={removeNodeById}
+              />
+            </ul>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Unplaced users legend */}
+      {/* Unplaced users */}
       {unplacedCount > 0 && (
-        <div className="mt-6 rounded-xl border border-card-border bg-card-bg p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground-secondary">
-            <Users className="h-4 w-4" />
-            Unplaced Users ({unplacedCount})
+        <section className="card">
+          <div className="card-head">
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="card-title">Unplaced people</h2>
+              <TagPill>{unplacedCount}</TagPill>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {allUsers
-              .filter(u => !usedIds.has(u.id) && u.role !== "ADMIN")
-              .map(u => (
-                <span key={u.id} className="rounded-lg border border-border bg-background-secondary px-3 py-1 text-xs text-foreground-muted">
-                  {u.firstName} {u.lastName}
-                  <span className="ml-1.5 text-foreground-muted/50">· {TIER_SHORT[u.tier] ?? u.tier}</span>
-                </span>
-              ))}
+          <p className="card-sub">Not in any position yet. Choose them in a position above to place them.</p>
+          <div className="person-pills">
+            {unplaced.map(u => (
+              <span key={u.id} className="tag-pill">
+                {u.firstName} {u.lastName}
+                <span className="muted" style={{ marginInlineStart: 6 }}>· {TIER_SHORT[u.tier] ?? u.tier}</span>
+              </span>
+            ))}
           </div>
-        </div>
+        </section>
       )}
-    </div>
+    </>
   )
 }
 
@@ -317,96 +330,90 @@ function OrgNodeCard({
     !usedIds.has(u.id) || u.id === node.userId
   )
 
-  return (
-    <div className="flex flex-col items-center">
-      {/* Card */}
-      <div className={`relative w-52 rounded-xl border bg-card-bg p-3 shadow-sm transition-colors ${
-        user
-          ? "border-blue-500/40 bg-blue-500/5"
-          : "border-dashed border-border"
-      }`}>
-        {/* Remove button (not on root) */}
-        {!isRoot && (
-          <button
-            onClick={() => onRemove(node.nodeId)}
-            className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card-bg text-foreground-muted hover:border-red-500/50 hover:text-red-400"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
+  const selectId = `org-select-${node.nodeId}`
+  const personName = user ? `${user.firstName} ${user.lastName}` : null
 
-        {/* User select */}
-        <select
-          value={node.userId ?? ""}
-          onChange={e => onSetUser(node.nodeId, e.target.value || null)}
-          className={`w-full rounded-lg border bg-input px-2 py-1.5 text-sm outline-none focus:border-blue-500 ${
-            user ? "border-blue-500/30 text-foreground" : "border-border text-foreground-muted"
-          }`}
-        >
-          <option value="">— Select user —</option>
-          {options.map(u => (
-            <option key={u.id} value={u.id}>
-              {u.firstName} {u.lastName}
-            </option>
-          ))}
-        </select>
+  return (
+    <li>
+      <div className={`org-node${user ? "" : " vacant"}`}>
+        <div className="org-node-head">
+          <label htmlFor={selectId} className="sr-only">
+            {personName ? `Person in ${personName}'s position` : "Person in this position"}
+          </label>
+          <div className="min-w-0 flex-1">
+            <SelectWrap>
+              <select
+                id={selectId}
+                className="select"
+                value={node.userId ?? ""}
+                onChange={e => onSetUser(node.nodeId, e.target.value || null)}
+              >
+                <option value="">Select a person</option>
+                {options.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
+          </div>
+          {/* Remove button (not on root) */}
+          {!isRoot && (
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => onRemove(node.nodeId)}
+              aria-label={personName ? `Remove ${personName}'s position` : "Remove this position"}
+              title="Remove position"
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
         {/* User info */}
         {user && (
-          <div className="mt-2 space-y-0.5">
-            <p className="text-xs font-medium text-foreground">{user.firstName} {user.lastName}</p>
-            <p className="text-[11px] text-foreground-muted">
-              {TIER_LABELS[user.tier as keyof typeof TIER_LABELS]}
-            </p>
-            {user.jobTitle && (
-              <p className="text-[11px] text-foreground-muted/70">{user.jobTitle}</p>
-            )}
+          <div className="org-node-head">
+            <UserAvatar firstName={user.firstName} lastName={user.lastName} />
+            <div className="org-node-text">
+              <span className="org-node-name">{user.firstName} {user.lastName}</span>
+              {user.jobTitle && <span className="org-node-sub">{user.jobTitle}</span>}
+            </div>
+          </div>
+        )}
+        {user && (
+          <div className="org-node-tags">
+            <TagPill>{TIER_LABELS[user.tier as keyof typeof TIER_LABELS] ?? user.tier}</TagPill>
           </div>
         )}
 
         {/* Add child button */}
         <button
+          type="button"
+          className="btn btn-sm btn-block"
           onClick={() => onAddChild(node.nodeId)}
-          className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-border py-1 text-xs text-foreground-muted transition-colors hover:border-blue-500/50 hover:text-blue-400"
         >
-          <Plus className="h-3 w-3" />
+          <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
           Add subordinate
         </button>
       </div>
 
       {/* Children */}
       {node.children.length > 0 && (
-        <div className="flex flex-col items-center">
-          {/* Vertical line down from parent */}
-          <div className="h-6 w-px bg-border" />
-
-          {/* Horizontal connector + children */}
-          <div className="relative flex items-start gap-6">
-            {/* Horizontal line — spans from center of first child to center of last */}
-            {node.children.length > 1 && (
-              <div
-                className="absolute top-0 h-px bg-border"
-                style={{ left: "calc(104px)", right: "calc(104px)" }}
-              />
-            )}
-
-            {node.children.map((child) => (
-              <div key={child.nodeId} className="flex flex-col items-center">
-                {/* Vertical drop to child */}
-                <div className="h-6 w-px bg-border" />
-                <OrgNodeCard
-                  node={child}
-                  allUsers={allUsers}
-                  usedIds={usedIds}
-                  onSetUser={onSetUser}
-                  onAddChild={onAddChild}
-                  onRemove={onRemove}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        <ul>
+          {node.children.map((child) => (
+            <OrgNodeCard
+              key={child.nodeId}
+              node={child}
+              allUsers={allUsers}
+              usedIds={usedIds}
+              onSetUser={onSetUser}
+              onAddChild={onAddChild}
+              onRemove={onRemove}
+            />
+          ))}
+        </ul>
       )}
-    </div>
+    </li>
   )
 }

@@ -1,25 +1,40 @@
 "use client"
 
-import { useState } from "react"
+import { usePathname } from "next/navigation"
 import { Sidebar } from "@/components/layout/Sidebar"
-import { Topbar } from "@/components/layout/Topbar"
+import { TabBar } from "@/components/layout/TabBar"
 
+/**
+ * The shell: on desktop two panels (navigation, content) floating on the
+ * page ground; on a phone the content is the whole screen with a tab bar.
+ */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const pathname = usePathname()
 
   return (
-    <div className="app-frame-full flex h-screen overflow-hidden">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed(!collapsed)}
-      />
-      <div className="relative z-40 flex flex-1 flex-col overflow-hidden">
-        <Topbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+    <div className="app" id="app">
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault()
+          document.getElementById("main")?.focus()
+        }}
+      >
+        Skip to content
+      </a>
+      <div className="shell">
+        <Sidebar />
+        <main id="main" className="main" tabIndex={-1}>
+          <div className="main-inner">
+            {/* Keyed so each route plays the view-in animation. */}
+            <div className="view" key={pathname}>
+              {children}
+            </div>
+          </div>
+        </main>
       </div>
+      <TabBar />
     </div>
   )
 }

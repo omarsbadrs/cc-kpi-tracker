@@ -1,14 +1,21 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, type KeyboardEvent } from "react"
+import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { PageHeader } from "@/components/shared/PageHeader"
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
-import { Badge } from "@/components/shared/Badge"
-import { Pagination } from "@/components/shared/Pagination"
-import { TIER_LABELS, ROLE_LABELS } from "@/lib/constants"
 import { useRouter } from "next/navigation"
-import { Clock, UserCog, UserPlus, UserMinus, Shield, ChevronDown, Filter, X, ArrowUpDown } from "lucide-react"
+import { Clock, UserCog, UserPlus, UserMinus, Shield, SlidersHorizontal, X, Plus, Users } from "lucide-react"
+import { PageHead } from "@/components/ui/PageHead"
+import { Field, SelectWrap, SearchInput } from "@/components/ui/Field"
+import { StatusChip, TagPill } from "@/components/ui/StatusChip"
+import { Modal } from "@/components/ui/Modal"
+import { useToast } from "@/components/ui/Toast"
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
+import { Pagination } from "@/components/shared/Pagination"
+import { EmptyState } from "@/components/shared/EmptyState"
+import { UserAvatar } from "@/components/layout/UserMenu"
+import { TIER_LABELS, ROLE_LABELS } from "@/lib/constants"
+import "@/styles/views/admin-users.css"
 
 interface Filters {
   search: string
@@ -33,18 +40,23 @@ const INITIAL_FILTERS: Filters = {
 }
 
 const SORT_OPTIONS = [
-  { value: "createdAt", label: "Date Created" },
-  { value: "firstName", label: "First Name" },
-  { value: "lastName", label: "Last Name" },
+  { value: "createdAt", label: "Date created" },
+  { value: "firstName", label: "First name" },
+  { value: "lastName", label: "Last name" },
   { value: "email", label: "Email" },
   { value: "role", label: "Role" },
   { value: "tier", label: "Tier" },
-  { value: "lastLoginAt", label: "Last Login" },
+  { value: "lastLoginAt", label: "Last sign-in" },
 ]
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`
+}
 
 export default function AdminUsersPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
@@ -62,6 +74,8 @@ export default function AdminUsersPage() {
 
   const activeFilterCount = [filters.role, filters.tier, filters.isActive, filters.departmentId, filters.managerId]
     .filter(Boolean).length
+  // Role and tier sit in the toolbar; the rest live behind "More filters".
+  const moreFilterCount = [filters.isActive, filters.departmentId, filters.managerId].filter(Boolean).length
 
   // Fetch departments for filter dropdown
   const { data: deptData } = useQuery({
@@ -87,7 +101,9 @@ export default function AdminUsersPage() {
       return { data: [...(json.data || []), ...(json2.data || [])] }
     },
   })
-  const managers: Array<{ id: string; firstName: string; lastName: string }> = mgrData?.data || []
+  const managers: Array<{ id: string; firstName: string; lastName: string; role?: string; isActive?: boolean }> =
+    mgrData?.data || []
+  const adminCount = mgrData ? managers.filter((m) => m.role === "ADMIN" && m.isActive !== false).length : null
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "users", page, filters],
@@ -123,257 +139,333 @@ export default function AdminUsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
       setShowCreateForm(false)
+      toast("User created")
+    },
+    onError: (err: Error) => {
+      toast(err.message || "Could not create the user. Check your connection", { icon: "alert" })
     },
   })
 
-  const users = data?.data || []
-  const meta = data?.meta
+  const users: UserRow[] = data?.data || []
+  const meta = data?.meta as { page: number; totalPages: number; total: number } | undefined
+
+  const openUser = (id: string) => router.push(`/admin/users/${id}`)
+  const onRowKey = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      openUser(id)
+    }
+  }
+
+  const subFacts: string[] = []
+  if (meta) subFacts.push(plural(meta.total, "person", "people"))
+  if (adminCount !== null) subFacts.push(plural(adminCount, "admin", "admins"))
+  if (filters.isActive === "true") subFacts.push("active accounts")
+  else if (filters.isActive === "false") subFacts.push("inactive accounts")
+
+  const managerName = (id: string) => {
+    const m = managers.find((x) => x.id === id)
+    return m ? `${m.firstName} ${m.lastName}` : "…"
+  }
 
   return (
     <div>
-      <PageHeader
-        title="User Management"
-        description={`${meta?.total ?? "..."} users total`}
-        action={
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            {showCreateForm ? "Cancel" : "Add User"}
+      <PageHead
+        title="Users"
+        sub={subFacts.length ? subFacts.join(" · ") : "Loading…"}
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => setShowCreateForm(true)}>
+            <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+            New user
           </button>
         }
       />
 
-      {/* Search + Filter Toggle */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="Search by name, email, or employee ID..."
+      {/* Search + role/tier + more filters */}
+      <div className="toolbar wrap">
+        <SearchInput
+          placeholder="Search name, email or employee ID"
+          aria-label="Search users"
           value={filters.search}
           onChange={(e) => updateFilter("search", e.target.value)}
-          className="w-full max-w-md rounded-lg border border-border bg-input px-4 py-2 text-sm text-foreground placeholder-foreground-muted outline-none focus:border-blue-500"
         />
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-            showFilters || activeFilterCount > 0
-              ? "border-blue-500 bg-blue-500/10 text-blue-400"
-              : "border-border text-foreground-muted hover:bg-card-hover"
-          }`}
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-        {activeFilterCount > 0 && (
-          <button
-            onClick={clearFilters}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground-muted transition-colors hover:bg-card-hover hover:text-foreground"
-          >
-            <X className="h-3.5 w-3.5" />
-            Clear all
-          </button>
-        )}
-      </div>
-
-      {/* Filter Bar */}
-      {showFilters && (
-        <div className="mb-4 rounded-xl border border-card-border bg-card-bg p-4">
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-            {/* Role */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Role</label>
-              <select
-                value={filters.role}
-                onChange={(e) => updateFilter("role", e.target.value)}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
-              >
-                <option value="">All Roles</option>
-                <option value="ADMIN">Admin</option>
-                <option value="MANAGER">Manager</option>
-                <option value="USER">User</option>
-              </select>
-            </div>
-
-            {/* Tier */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Tier</label>
-              <select
-                value={filters.tier}
-                onChange={(e) => updateFilter("tier", e.target.value)}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
-              >
-                <option value="">All Tiers</option>
-                {Object.entries(TIER_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Status</label>
-              <select
-                value={filters.isActive}
-                onChange={(e) => updateFilter("isActive", e.target.value)}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
-              >
-                <option value="">All Statuses</option>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
-            </div>
-
-            {/* Department */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Department</label>
-              <select
-                value={filters.departmentId}
-                onChange={(e) => updateFilter("departmentId", e.target.value)}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
-              >
-                <option value="">All Departments</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Manager */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-foreground-muted">Reports To</label>
-              <select
-                value={filters.managerId}
-                onChange={(e) => updateFilter("managerId", e.target.value)}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500"
-              >
-                <option value="">All Managers</option>
-                {managers.map((m) => (
-                  <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Sort row */}
-          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
-            <ArrowUpDown className="h-4 w-4 text-foreground-muted" />
-            <label className="text-xs font-medium text-foreground-muted">Sort by</label>
+        <div className="toolbar-select">
+          <SelectWrap>
             <select
-              value={filters.sortBy}
-              onChange={(e) => updateFilter("sortBy", e.target.value)}
-              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
+              className="select"
+              aria-label="Role"
+              value={filters.role}
+              onChange={(e) => updateFilter("role", e.target.value)}
             >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option value="">All roles</option>
+              <option value="ADMIN">Admin</option>
+              <option value="MANAGER">Manager</option>
+              <option value="USER">User</option>
+            </select>
+          </SelectWrap>
+        </div>
+        <div className="toolbar-select">
+          <SelectWrap>
+            <select
+              className="select"
+              aria-label="Tier"
+              value={filters.tier}
+              onChange={(e) => updateFilter("tier", e.target.value)}
+            >
+              <option value="">All tiers</option>
+              {Object.entries(TIER_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
               ))}
             </select>
-            <select
-              value={filters.sortOrder}
-              onChange={(e) => updateFilter("sortOrder", e.target.value)}
-              className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground outline-none focus:border-blue-500"
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
+          </SelectWrap>
         </div>
+        <button
+          type="button"
+          className="btn"
+          aria-expanded={showFilters}
+          aria-controls="user-filters"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <SlidersHorizontal size={15} aria-hidden="true" />
+          More filters
+          {moreFilterCount > 0 && <TagPill>{moreFilterCount}</TagPill>}
+        </button>
+      </div>
+
+      {/* More filters */}
+      {showFilters && (
+        <section className="card mb-3" id="user-filters" aria-label="More filters">
+          <div className="field-grid">
+            <Field label="Status" htmlFor="filter-status">
+              <SelectWrap>
+                <select
+                  id="filter-status"
+                  className="select"
+                  value={filters.isActive}
+                  onChange={(e) => updateFilter("isActive", e.target.value)}
+                >
+                  <option value="">All statuses</option>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </SelectWrap>
+            </Field>
+            <Field label="Department" htmlFor="filter-department">
+              <SelectWrap>
+                <select
+                  id="filter-department"
+                  className="select"
+                  value={filters.departmentId}
+                  onChange={(e) => updateFilter("departmentId", e.target.value)}
+                >
+                  <option value="">All departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </SelectWrap>
+            </Field>
+            <Field label="Reports to" htmlFor="filter-manager">
+              <SelectWrap>
+                <select
+                  id="filter-manager"
+                  className="select"
+                  value={filters.managerId}
+                  onChange={(e) => updateFilter("managerId", e.target.value)}
+                >
+                  <option value="">All managers</option>
+                  {managers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>
+                  ))}
+                </select>
+              </SelectWrap>
+            </Field>
+            <Field label="Sort by" htmlFor="filter-sort">
+              <SelectWrap>
+                <select
+                  id="filter-sort"
+                  className="select"
+                  value={filters.sortBy}
+                  onChange={(e) => updateFilter("sortBy", e.target.value)}
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </SelectWrap>
+            </Field>
+            <Field label="Order" htmlFor="filter-order">
+              <SelectWrap>
+                <select
+                  id="filter-order"
+                  className="select"
+                  value={filters.sortOrder}
+                  onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </SelectWrap>
+            </Field>
+          </div>
+        </section>
       )}
 
-      {/* Active Filter Tags */}
+      {/* Active filters: never filter invisibly */}
       {activeFilterCount > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="chip-row" role="group" aria-label="Active filters">
           {filters.role && (
-            <FilterTag label={`Role: ${ROLE_LABELS[filters.role as keyof typeof ROLE_LABELS]}`} onRemove={() => updateFilter("role", "")} />
+            <FilterTag
+              label={`Role: ${ROLE_LABELS[filters.role as keyof typeof ROLE_LABELS]}`}
+              onRemove={() => updateFilter("role", "")}
+            />
           )}
           {filters.tier && (
-            <FilterTag label={`Tier: ${TIER_LABELS[filters.tier as keyof typeof TIER_LABELS]}`} onRemove={() => updateFilter("tier", "")} />
+            <FilterTag
+              label={`Tier: ${TIER_LABELS[filters.tier as keyof typeof TIER_LABELS]}`}
+              onRemove={() => updateFilter("tier", "")}
+            />
           )}
           {filters.isActive && (
-            <FilterTag label={`Status: ${filters.isActive === "true" ? "Active" : "Inactive"}`} onRemove={() => updateFilter("isActive", "")} />
+            <FilterTag
+              label={`Status: ${filters.isActive === "true" ? "Active" : "Inactive"}`}
+              onRemove={() => updateFilter("isActive", "")}
+            />
           )}
           {filters.departmentId && (
-            <FilterTag label={`Dept: ${departments.find((d) => d.id === filters.departmentId)?.name || "..."}`} onRemove={() => updateFilter("departmentId", "")} />
+            <FilterTag
+              label={`Department: ${departments.find((d) => d.id === filters.departmentId)?.name || "…"}`}
+              onRemove={() => updateFilter("departmentId", "")}
+            />
           )}
           {filters.managerId && (
             <FilterTag
-              label={`Manager: ${(() => { const m = managers.find((m) => m.id === filters.managerId); return m ? `${m.firstName} ${m.lastName}` : "..." })()}`}
+              label={`Reports to: ${managerName(filters.managerId)}`}
               onRemove={() => updateFilter("managerId", "")}
             />
           )}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
+            Clear all
+          </button>
         </div>
       )}
 
-      {/* Create Form */}
-      {showCreateForm && (
-        <CreateUserForm
-          onSubmit={(data) => createUser.mutate(data)}
-          isLoading={createUser.isPending}
-          error={createUser.error?.message}
-        />
-      )}
-
-      {/* Users Table */}
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-card-border bg-card-bg">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-background-secondary">
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Name</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Email</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Role</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Tier</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Department</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Manager</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-foreground-muted">
-                    No users found matching your filters.
-                  </td>
-                </tr>
-              ) : (
-                users.map((user: UserRow) => (
-                  <tr
-                    key={user.id}
-                    onClick={() => router.push(`/admin/users/${user.id}`)}
-                    className="cursor-pointer border-b border-border transition-colors hover:bg-card-hover"
-                  >
-                    <td className="px-4 py-3 font-medium text-foreground">{user.firstName} {user.lastName}</td>
-                    <td className="px-4 py-3 text-foreground-secondary">{user.email}</td>
-                    <td className="px-4 py-3"><Badge>{ROLE_LABELS[user.role as keyof typeof ROLE_LABELS]}</Badge></td>
-                    <td className="px-4 py-3 text-xs text-foreground-muted">{TIER_LABELS[user.tier as keyof typeof TIER_LABELS]}</td>
-                    <td className="px-4 py-3 text-xs text-foreground-muted">{user.department?.name || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-foreground-muted">
-                      {user.manager ? `${user.manager.firstName} ${user.manager.lastName}` : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={user.isActive ? "success" : "danger"}>
-                        {user.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
+      {/* Users table */}
+      <section className="card list-card">
+        <div className="card-head">
+          <div className="flex items-center gap-2">
+            <h2 className="card-title">People</h2>
+            {meta && <TagPill>{meta.total}</TagPill>}
+          </div>
+        </div>
+        {isLoading ? (
+          <LoadingSpinner label="Loading users…" />
+        ) : users.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No users match these filters"
+            description="Try a different search, or clear the filters to see everyone."
+            action={
+              activeFilterCount > 0 || filters.search ? (
+                <button type="button" className="btn" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Users">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Person</th>
+                    <th scope="col">Employee ID</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Tier</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Manager</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          {meta && meta.totalPages > 1 && (
-            <Pagination page={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
-          )}
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {users.map((user) => {
+                    const name = `${user.firstName} ${user.lastName}`
+                    return (
+                      <tr
+                        key={user.id}
+                        className="clickable"
+                        tabIndex={0}
+                        aria-label={`Open ${name}`}
+                        onClick={() => openUser(user.id)}
+                        onKeyDown={(e) => onRowKey(e, user.id)}
+                      >
+                        <td>
+                          <div className="person-cell">
+                            <UserAvatar firstName={user.firstName} lastName={user.lastName} avatarUrl={user.avatarUrl} />
+                            <div className="person-text">
+                              <span className="person-name">{name}</span>
+                              <span className="person-sub">{user.email}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="nowrap">
+                          {user.employeeId ? <span className="kpi-code">{user.employeeId}</span> : <span className="muted">—</span>}
+                        </td>
+                        <td>
+                          <TagPill>{ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ?? user.role}</TagPill>
+                        </td>
+                        <td className="nowrap ink-2">{TIER_LABELS[user.tier as keyof typeof TIER_LABELS] ?? user.tier}</td>
+                        <td className="clip muted">{user.department?.name || "—"}</td>
+                        <td className="clip muted">
+                          {user.manager ? `${user.manager.firstName} ${user.manager.lastName}` : "—"}
+                        </td>
+                        <td>
+                          <StatusChip tone={user.isActive ? "ok" : "neutral"} small>
+                            {user.isActive ? "Active" : "Inactive"}
+                          </StatusChip>
+                        </td>
+                        <td className="num">
+                          <Link
+                            href={`/admin/users/${user.id}`}
+                            className="btn btn-sm"
+                            aria-label={`Edit ${name}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Edit
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {meta && meta.totalPages > 1 && (
+              <Pagination page={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+            )}
+          </>
+        )}
+      </section>
 
-      {/* Global Audit Trail */}
+      {/* Global audit trail */}
       <GlobalAuditTrail />
+
+      <Modal
+        open={showCreateForm}
+        onClose={() => setShowCreateForm(false)}
+        title="New user"
+        wide
+        locked={createUser.isPending}
+      >
+        <CreateUserForm
+          onSubmit={(formData) => createUser.mutate(formData)}
+          onCancel={() => setShowCreateForm(false)}
+          isLoading={createUser.isPending}
+        />
+      </Modal>
     </div>
   )
 }
@@ -387,6 +479,8 @@ interface UserRow {
   firstName: string
   lastName: string
   email: string
+  employeeId?: string | null
+  avatarUrl?: string | null
   role: string
   tier: string
   isActive: boolean
@@ -396,12 +490,10 @@ interface UserRow {
 
 function FilterTag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400">
+    <button type="button" className="chip active" aria-pressed="true" aria-label={`Remove filter ${label}`} title="Remove filter" onClick={onRemove}>
       {label}
-      <button onClick={onRemove} className="rounded-full p-0.5 hover:bg-blue-500/20">
-        <X className="h-3 w-3" />
-      </button>
-    </span>
+      <X size={14} aria-hidden="true" />
+    </button>
   )
 }
 
@@ -425,24 +517,24 @@ interface AuditLogEntry {
   }
 }
 
-const ACTION_CONFIG: Record<string, { label: string; icon: typeof UserCog; color: string }> = {
-  CREATE_USER: { label: "User Created", icon: UserPlus, color: "text-green-500" },
-  UPDATE_USER: { label: "User Updated", icon: UserCog, color: "text-blue-400" },
-  ACTIVATE_USER: { label: "User Activated", icon: Shield, color: "text-green-500" },
-  DEACTIVATE_USER: { label: "User Deactivated", icon: UserMinus, color: "text-red-400" },
+const ACTION_CONFIG: Record<string, { label: string; icon: typeof UserCog }> = {
+  CREATE_USER: { label: "User created", icon: UserPlus },
+  UPDATE_USER: { label: "User updated", icon: UserCog },
+  ACTIVATE_USER: { label: "User activated", icon: Shield },
+  DEACTIVATE_USER: { label: "User deactivated", icon: UserMinus },
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  firstName: "First Name",
-  lastName: "Last Name",
+  firstName: "First name",
+  lastName: "Last name",
   email: "Email",
   role: "Role",
   tier: "Tier",
-  jobTitle: "Job Title",
+  jobTitle: "Job title",
   isActive: "Status",
   employeeId: "Employee ID",
   nationality: "Nationality",
-  graduationYear: "Graduation Year",
+  graduationYear: "Graduation year",
 }
 
 function formatAuditValue(key: string, value: unknown): string {
@@ -481,46 +573,43 @@ function GlobalAuditTrail() {
   })
 
   const logs: AuditLogEntry[] = data?.data || []
-  const logMeta = data?.meta
+  const logMeta = data?.meta as { page: number; totalPages: number; total: number } | undefined
 
   return (
-    <div className="mt-8 rounded-xl border border-card-border bg-card-bg">
-      {/* Header — clickable to expand/collapse */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-card-hover"
-        style={{ borderRadius: 12 }}
-      >
-        <div className="flex items-center gap-2.5">
-          <Clock className="h-4.5 w-4.5 text-foreground-muted" />
-          <h3 className="text-base font-semibold text-foreground">Audit Trail</h3>
-          {logMeta?.total != null && (
-            <span className="rounded-full bg-background-secondary px-2.5 py-0.5 text-xs font-medium text-foreground-muted">
-              {logMeta.total}
-            </span>
-          )}
+    <>
+      <h2 className="section-head">Audit log</h2>
+      <section className="card list-card" aria-label="Audit log">
+        <div className="card-head">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="card-title">Changes to user accounts</span>
+            {logMeta?.total != null && <TagPill>{logMeta.total}</TagPill>}
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            aria-expanded={expanded}
+            aria-controls="global-audit-log"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? "Hide log" : "Show log"}
+          </button>
         </div>
-        <ChevronDown
-          className={`h-4 w-4 text-foreground-muted transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
-        />
-      </button>
 
-      {/* Content */}
-      {expanded && (
-        <div className="border-t border-border px-6 py-5">
-          {isLoading ? (
-            <div className="py-8 text-center text-sm text-foreground-muted">Loading audit trail...</div>
-          ) : logs.length === 0 ? (
-            <div className="py-8 text-center text-sm text-foreground-muted">No audit trail entries yet</div>
-          ) : (
-            <>
-              <div className="relative">
-                {/* Timeline line */}
-                <div className="absolute left-[17px] top-2 bottom-2 w-px bg-border" />
-
-                <div className="space-y-0">
+        {expanded && (
+          <div id="global-audit-log">
+            {isLoading ? (
+              <LoadingSpinner label="Loading audit log…" />
+            ) : logs.length === 0 ? (
+              <EmptyState
+                icon={Clock}
+                title="No changes logged yet"
+                description="Creating, editing or deactivating a user adds an entry here."
+              />
+            ) : (
+              <>
+                <div className="audit-list">
                   {logs.map((log) => {
-                    const config = ACTION_CONFIG[log.action] || { label: log.action, icon: UserCog, color: "text-foreground-muted" }
+                    const config = ACTION_CONFIG[log.action] || { label: log.action, icon: UserCog }
                     const Icon = config.icon
                     const targetName = getTargetUserName(log)
                     const changedFields = log.oldValue && log.newValue
@@ -528,36 +617,33 @@ function GlobalAuditTrail() {
                       : []
 
                     return (
-                      <div key={log.id} className="relative flex gap-4 py-3">
-                        {/* Timeline dot */}
-                        <div className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-card-border bg-card-bg ${config.color}`}>
-                          <Icon className="h-4 w-4" />
-                        </div>
+                      <div key={log.id} className="audit-row">
+                        <span className="audit-ic">
+                          <Icon size={17} strokeWidth={1.6} aria-hidden="true" />
+                        </span>
+                        <div className="audit-main">
+                          <span className="audit-title">
+                            {config.label}
+                            {targetName && <span className="audit-target"> · {targetName}</span>}
+                          </span>
+                          <span className="audit-sub">
+                            <span className="kpi-code">{log.action}</span>
+                            {" · "}by {log.user.firstName} {log.user.lastName}
+                            {" · "}
+                            <time dateTime={log.createdAt}>{new Date(log.createdAt).toLocaleString()}</time>
+                          </span>
 
-                        {/* Content */}
-                        <div className="min-w-0 flex-1 pt-0.5">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <span className={`text-sm font-medium ${config.color}`}>{config.label}</span>
-                            {targetName && (
-                              <span className="text-sm font-medium text-foreground">{targetName}</span>
-                            )}
-                            <span className="text-xs text-foreground-muted">
-                              by {log.user.firstName} {log.user.lastName}
-                            </span>
-                            <span className="text-xs text-foreground-muted">
-                              {new Date(log.createdAt).toLocaleString()}
-                            </span>
-                          </div>
-
-                          {/* Changed fields for UPDATE */}
+                          {/* Changed fields for updates */}
                           {changedFields.length > 0 && log.action !== "CREATE_USER" && (
-                            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                            <div className="audit-changes">
                               {changedFields.map((field) => (
-                                <div key={field} className="flex items-center gap-1.5 text-xs">
-                                  <span className="text-foreground-muted">{FIELD_LABELS[field] || field}:</span>
-                                  <span className="text-red-400/70 line-through">{formatAuditValue(field, log.oldValue?.[field])}</span>
-                                  <span className="text-foreground-muted">&rarr;</span>
-                                  <span className="text-green-400">{formatAuditValue(field, log.newValue?.[field])}</span>
+                                <div key={field} className="audit-change">
+                                  <span className="audit-field">{FIELD_LABELS[field] || field}</span>
+                                  <span className="audit-vals">
+                                    <del>{formatAuditValue(field, log.oldValue?.[field])}</del>
+                                    <span className="audit-arrow" aria-label="changed to">→</span>
+                                    {formatAuditValue(field, log.newValue?.[field])}
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -565,11 +651,11 @@ function GlobalAuditTrail() {
 
                           {/* Created values */}
                           {log.action === "CREATE_USER" && log.newValue && (
-                            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                            <div className="audit-changes">
                               {Object.entries(log.newValue).map(([field, val]) => (
-                                <div key={field} className="flex items-center gap-1.5 text-xs">
-                                  <span className="text-foreground-muted">{FIELD_LABELS[field] || field}:</span>
-                                  <span className="text-green-400">{formatAuditValue(field, val)}</span>
+                                <div key={field} className="audit-change">
+                                  <span className="audit-field">{FIELD_LABELS[field] || field}</span>
+                                  <span className="audit-vals">{formatAuditValue(field, val)}</span>
                                 </div>
                               ))}
                             </div>
@@ -579,19 +665,16 @@ function GlobalAuditTrail() {
                     )
                   })}
                 </div>
-              </div>
 
-              {/* Pagination */}
-              {logMeta && logMeta.totalPages > 1 && (
-                <div className="mt-4 border-t border-border pt-4">
+                {logMeta && logMeta.totalPages > 1 && (
                   <Pagination page={logMeta.page} totalPages={logMeta.totalPages} onPageChange={setLogPage} />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </section>
+    </>
   )
 }
 
@@ -599,7 +682,15 @@ function GlobalAuditTrail() {
 // Create User Form
 // ─────────────────────────────────────
 
-function CreateUserForm({ onSubmit, isLoading, error }: { onSubmit: (data: Record<string, string>) => void; isLoading: boolean; error?: string }) {
+function CreateUserForm({
+  onSubmit,
+  onCancel,
+  isLoading,
+}: {
+  onSubmit: (data: Record<string, string>) => void
+  onCancel: () => void
+  isLoading: boolean
+}) {
   const [formData, setFormData] = useState({
     email: "", password: "", firstName: "", lastName: "",
     role: "USER", tier: "ENGINEER", jobTitle: "", employeeId: "",
@@ -608,32 +699,74 @@ function CreateUserForm({ onSubmit, isLoading, error }: { onSubmit: (data: Recor
   const update = (key: string, value: string) => setFormData({ ...formData, [key]: value })
 
   return (
-    <div className="mb-6 rounded-xl border border-card-border bg-card-bg p-6">
-      <h3 className="mb-4 text-sm font-medium text-foreground-muted">New User</h3>
-      {error && <div className="mb-4 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">{error}</div>}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <input placeholder="First Name" value={formData.firstName} onChange={(e) => update("firstName", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500" />
-        <input placeholder="Last Name" value={formData.lastName} onChange={(e) => update("lastName", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500" />
-        <input placeholder="Email" type="email" value={formData.email} onChange={(e) => update("email", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500" />
-        <input placeholder="Password" type="password" value={formData.password} onChange={(e) => update("password", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500" />
-        <select value={formData.role} onChange={(e) => update("role", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500">
-          <option value="USER">User</option>
-          <option value="MANAGER">Manager</option>
-          <option value="ADMIN">Admin</option>
-        </select>
-        <select value={formData.tier} onChange={(e) => update("tier", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500">
-          <option value="JUNIOR">Junior</option>
-          <option value="ENGINEER">Engineer</option>
-          <option value="SENIOR">Senior</option>
-          <option value="TEAM_LEAD">Team Lead</option>
-          <option value="SECTION_HEAD">Head of Department</option>
-        </select>
-        <input placeholder="Job Title" value={formData.jobTitle} onChange={(e) => update("jobTitle", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500" />
-        <input placeholder="Employee ID" value={formData.employeeId} onChange={(e) => update("employeeId", e.target.value)} className="rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-blue-500" />
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!isLoading) onSubmit(formData)
+      }}
+    >
+      <h3 className="form-section" style={{ borderTop: 0, paddingTop: 0 }}>Identity</h3>
+      <div className="field-grid">
+        <Field label="First name" htmlFor="new-first-name">
+          <input id="new-first-name" className="input" autoComplete="off" value={formData.firstName} onChange={(e) => update("firstName", e.target.value)} />
+        </Field>
+        <Field label="Last name" htmlFor="new-last-name">
+          <input id="new-last-name" className="input" autoComplete="off" value={formData.lastName} onChange={(e) => update("lastName", e.target.value)} />
+        </Field>
+        <Field label="Employee ID" htmlFor="new-employee-id">
+          <input id="new-employee-id" className="input" placeholder="e.g. 5684" value={formData.employeeId} onChange={(e) => update("employeeId", e.target.value)} />
+        </Field>
       </div>
-      <button onClick={() => onSubmit(formData)} disabled={isLoading} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-        {isLoading ? "Creating..." : "Create User"}
-      </button>
-    </div>
+
+      <h3 className="form-section">Sign-in</h3>
+      <div className="field-grid">
+        <Field label="Email" htmlFor="new-email">
+          <input id="new-email" className="input" type="email" autoComplete="off" value={formData.email} onChange={(e) => update("email", e.target.value)} />
+        </Field>
+        <Field
+          label="Password"
+          hint="8+ characters with upper and lower case, a number and a symbol"
+          htmlFor="new-password"
+        >
+          <input id="new-password" className="input" type="password" autoComplete="new-password" value={formData.password} onChange={(e) => update("password", e.target.value)} />
+        </Field>
+      </div>
+
+      <h3 className="form-section">Role and tier</h3>
+      <div className="field-grid">
+        <Field label="Role" htmlFor="new-role">
+          <SelectWrap>
+            <select id="new-role" className="select" value={formData.role} onChange={(e) => update("role", e.target.value)}>
+              <option value="USER">User</option>
+              <option value="MANAGER">Manager</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </SelectWrap>
+        </Field>
+        <Field label="Tier" htmlFor="new-tier">
+          <SelectWrap>
+            <select id="new-tier" className="select" value={formData.tier} onChange={(e) => update("tier", e.target.value)}>
+              <option value="JUNIOR">Junior</option>
+              <option value="ENGINEER">Engineer</option>
+              <option value="SENIOR">Senior</option>
+              <option value="TEAM_LEAD">Team lead</option>
+              <option value="SECTION_HEAD">Head of department</option>
+            </select>
+          </SelectWrap>
+        </Field>
+        <Field label="Job title" htmlFor="new-job-title">
+          <input id="new-job-title" className="input" value={formData.jobTitle} onChange={(e) => update("jobTitle", e.target.value)} />
+        </Field>
+      </div>
+
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 4 }}>
+        <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn-primary" aria-disabled={isLoading || undefined}>
+          {isLoading ? "Creating…" : "Create user"}
+        </button>
+      </div>
+    </form>
   )
 }

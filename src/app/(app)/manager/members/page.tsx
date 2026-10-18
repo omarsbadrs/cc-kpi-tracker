@@ -3,17 +3,20 @@
 import { useState, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useQuery } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
-import { PageHeader } from "@/components/shared/PageHeader"
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
-import { TIER_LABELS, TIER_SHORT } from "@/lib/constants"
-import {
-  Search, Network, Mail, UserCircle, Download, Users,
-  ChevronDown, ChevronUp,
-} from "lucide-react"
 import Link from "next/link"
+import { ChevronDown, ChevronUp, ChevronsUpDown, Download, Mail, Network, Users } from "lucide-react"
+import { PageHead } from "@/components/ui/PageHead"
+import { StatGrid, StatTile } from "@/components/ui/StatGrid"
+import { SearchInput } from "@/components/ui/Field"
+import { StatusChip, TagPill } from "@/components/ui/StatusChip"
+import { useToast } from "@/components/ui/Toast"
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
+import { EmptyState } from "@/components/shared/EmptyState"
+import { UserAvatar } from "@/components/layout/UserMenu"
+import { TIER_LABELS, TIER_SHORT } from "@/lib/constants"
 import { useTeamReportPdf } from "@/hooks/useTeamReportPdf"
 import { useActivePeriod } from "@/hooks/usePeriods"
+import "@/styles/views/org-chart.css"
 
 // ─────────────────────────────────────
 // Types
@@ -52,24 +55,14 @@ interface TreeNode {
   children: TreeNode[]
 }
 
-// ─────────────────────────────────────
-// Tier colours
-// ─────────────────────────────────────
-
-const tierColors: Record<string, { bg: string; text: string; dot: string; avatar: string; border: string }> = {
-  SECTION_HEAD: { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-500", avatar: "from-violet-500 to-purple-600", border: "border-violet-500/30" },
-  TEAM_LEAD:    { bg: "bg-blue-500/10",   text: "text-blue-400",   dot: "bg-blue-500",   avatar: "from-blue-500 to-indigo-600",  border: "border-blue-500/30"   },
-  SENIOR:       { bg: "bg-emerald-500/10",text: "text-emerald-400",dot: "bg-emerald-500", avatar: "from-emerald-500 to-teal-600", border: "border-emerald-500/30" },
-  ENGINEER:     { bg: "bg-sky-500/10",    text: "text-sky-400",    dot: "bg-sky-500",     avatar: "from-sky-500 to-blue-600",     border: "border-sky-500/30"     },
-  JUNIOR:       { bg: "bg-amber-500/10",  text: "text-amber-400",  dot: "bg-amber-500",   avatar: "from-amber-500 to-orange-600", border: "border-amber-500/30"   },
-}
-const defaultColor: { bg: string; text: string; dot: string; avatar: string; border: string } = {
-  bg: "bg-sky-500/10", text: "text-sky-400", dot: "bg-sky-500",
-  avatar: "from-sky-500 to-blue-600", border: "border-sky-500/30",
-}
-
 // Tier display order (seniority)
 const TIER_ORDER = ["SECTION_HEAD", "TEAM_LEAD", "SENIOR", "ENGINEER", "JUNIOR"] as const
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+function jobTitleOf(m: Member): string {
+  return m.jobTitle || TIER_LABELS[m.tier as keyof typeof TIER_LABELS] || ""
+}
 
 // ─────────────────────────────────────
 // Tree builder
@@ -94,23 +87,23 @@ function buildTree(members: Member[]): TreeNode[] {
 }
 
 // ─────────────────────────────────────
-// Team Analytics Section
+// Team analytics
 // ─────────────────────────────────────
 
-const BADGE_STYLES = {
-  blue:  "bg-blue-500/10 text-blue-400",
-  amber: "bg-amber-500/10 text-amber-400",
-  green: "bg-emerald-500/10 text-emerald-400",
+/** A count in a table cell; a missing count reads as a dash, not a zero. */
+function CountCell({ value }: { value: number | undefined }) {
+  if (value === undefined) {
+    return (
+      <td className="num muted">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">None</span>
+      </td>
+    )
+  }
+  return <td className="num">{value}</td>
 }
 
-function KpiBadge({ value, color }: { value: number | undefined; color: "blue" | "amber" | "green" }) {
-  if (value === undefined) return <span className="text-xs text-foreground-muted/40">—</span>
-  return (
-    <span className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${BADGE_STYLES[color]}`}>
-      {value}
-    </span>
-  )
-}
+type SortField = "name" | "tier" | "email"
 
 function TeamAnalyticsSection({
   members,
@@ -128,7 +121,7 @@ function TeamAnalyticsSection({
   kpiApprovedByUser: Map<string, number>
 }) {
   const [dirExpanded, setDirExpanded] = useState(true)
-  const [sortField, setSortField] = useState<"name" | "tier" | "email">("tier")
+  const [sortField, setSortField] = useState<SortField>("tier")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
 
   // Exclude admins from staff analytics
@@ -176,194 +169,148 @@ function TeamAnalyticsSection({
     return copy
   }, [staff, sortField, sortDir])
 
-  const toggleSort = (field: typeof sortField) => {
+  const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
     else { setSortField(field); setSortDir("asc") }
   }
 
-  const SortIcon = ({ field }: { field: typeof sortField }) => {
-    if (sortField !== field) return <ChevronDown className="h-3 w-3 opacity-30" />
-    return sortDir === "asc"
-      ? <ChevronUp className="h-3 w-3 text-blue-400" />
-      : <ChevronDown className="h-3 w-3 text-blue-400" />
+  const ariaSort = (field: SortField): "ascending" | "descending" | "none" =>
+    sortField !== field ? "none" : sortDir === "asc" ? "ascending" : "descending"
+
+  const SortHead = ({ field, label }: { field: SortField; label: string }) => {
+    const Icon = sortField !== field ? ChevronsUpDown : sortDir === "asc" ? ChevronUp : ChevronDown
+    return (
+      <th scope="col" aria-sort={ariaSort(field)}>
+        <button type="button" className="sort-btn" onClick={() => toggleSort(field)}>
+          {label}
+          <Icon size={13} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      </th>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      {/* ── Summary banner ── */}
-      <div className="glass-card p-5 space-y-4">
-        {/* Row 1: stat cards */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-border bg-background-secondary/40 px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-foreground-muted">
-              {isAdmin ? "Total Headcount" : "Team Size"}
-            </p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-foreground">{staff.length}</p>
-            {!isAdmin && <p className="mt-0.5 truncate text-xs text-foreground-muted">{managerName}</p>}
-          </div>
-          <div className="rounded-xl border border-blue-500/25 bg-blue-500/8 px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-blue-400/70">Assigned KPIs</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-blue-400">{totalAssigned}</p>
-          </div>
-          <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-amber-400/70">KPI Actuals</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-amber-400">{totalActuals}</p>
-          </div>
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">Approved</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-400">{totalApproved}</p>
-          </div>
-        </div>
+    <>
+      {/* Summary strip */}
+      <StatGrid>
+        <StatTile
+          label={isAdmin ? "Total headcount" : "Team size"}
+          value={staff.length}
+          sub={!isAdmin && managerName ? managerName : undefined}
+        />
+        <StatTile label="Assigned KPIs" value={totalAssigned} />
+        <StatTile label="KPI actuals" value={totalActuals} />
+        <StatTile label="Approved" value={totalApproved} />
+      </StatGrid>
 
-        {/* Row 2: tier chips */}
-        <div className="flex flex-wrap gap-2">
-          {tierBreakdown.map(({ tier, count, assigned, actuals, approved }) => {
-            const c = tierColors[tier] ?? defaultColor
-            return (
-              <div key={tier} className={`rounded-xl border px-4 py-3 ${c.bg} ${c.border}`}>
-                {/* Tier name + headcount */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`h-2 w-2 rounded-full ${c.dot}`} />
-                  <p className={`text-xs font-semibold ${c.text}`}>{TIER_SHORT[tier] ?? tier}</p>
-                  <p className={`text-lg font-bold tabular-nums leading-none ${c.text}`}>{count}</p>
-                </div>
-                {/* KPI stats row */}
-                <div className="flex items-center gap-3">
-                  <div className="text-center">
-                    <p className="text-base font-bold tabular-nums text-blue-400">{assigned}</p>
-                    <p className="text-[10px] text-blue-400/60 leading-tight">Assigned</p>
-                  </div>
-                  <div className="h-6 w-px bg-border/50" />
-                  <div className="text-center">
-                    <p className="text-base font-bold tabular-nums text-amber-400">{actuals}</p>
-                    <p className="text-[10px] text-amber-400/60 leading-tight">Actuals</p>
-                  </div>
-                  <div className="h-6 w-px bg-border/50" />
-                  <div className="text-center">
-                    <p className="text-base font-bold tabular-nums text-emerald-400">{approved}</p>
-                    <p className="text-[10px] text-emerald-400/60 leading-tight">Approved</p>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── Member Directory Table ── */}
-      <div className="glass-card overflow-hidden">
-        {/* Table header — collapsible */}
-        <button
-          onClick={() => setDirExpanded(e => !e)}
-          className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-card-hover transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <Users className="h-4 w-4 text-foreground-muted" strokeWidth={1.5} />
-            <span className="text-sm font-semibold text-foreground">
-              Member Directory
-            </span>
-            <span className="rounded-full bg-background-secondary px-2 py-0.5 text-xs font-medium text-foreground-muted">
-              {staff.length}
-            </span>
+      {/* By tier */}
+      {tierBreakdown.length > 0 && (
+        <section className="card list-card">
+          <div className="card-head">
+            <h2 className="card-title">By tier</h2>
           </div>
-          <ChevronDown
-            className={`h-4 w-4 text-foreground-muted transition-transform duration-200 ${dirExpanded ? "rotate-180" : ""}`}
-            strokeWidth={1.5}
-          />
-        </button>
-
-        {dirExpanded && (
-          <div className="border-t border-border overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="KPI counts by tier">
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-border bg-background-secondary/50">
-                  <th className="w-8 px-4 py-2.5 text-xs font-medium text-foreground-muted">#</th>
-                  <th className="px-4 py-2.5">
-                    <button
-                      onClick={() => toggleSort("name")}
-                      className="flex items-center gap-1 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
-                    >
-                      Name <SortIcon field="name" />
-                    </button>
-                  </th>
-                  <th className="px-4 py-2.5">
-                    <button
-                      onClick={() => toggleSort("email")}
-                      className="flex items-center gap-1 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
-                    >
-                      Email <SortIcon field="email" />
-                    </button>
-                  </th>
-                  <th className="px-4 py-2.5">
-                    <button
-                      onClick={() => toggleSort("tier")}
-                      className="flex items-center gap-1 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
-                    >
-                      Tier <SortIcon field="tier" />
-                    </button>
-                  </th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Job Title</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary">Employee ID</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-center">Assigned KPIs</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-center">KPI Actuals</th>
-                  <th className="px-4 py-2.5 text-xs font-medium text-foreground-secondary text-center">Approved</th>
+                <tr>
+                  <th scope="col">Tier</th>
+                  <th scope="col" className="num">Members</th>
+                  <th scope="col" className="num">Assigned</th>
+                  <th scope="col" className="num">Actuals</th>
+                  <th scope="col" className="num">Approved</th>
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((m, i) => {
-                  const c = tierColors[m.tier] ?? defaultColor
-                  return (
-                    <tr key={m.id} className="border-b border-border/50 hover:bg-card-hover transition-colors">
-                      <td className="px-4 py-3 text-xs text-foreground-muted/50 tabular-nums">{i + 1}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${c.avatar} text-[11px] font-bold text-white`}>
-                            {m.firstName[0]}{m.lastName[0]}
-                          </div>
-                          <Link
-                            href={`/manager/members/${m.id}`}
-                            className="text-sm font-medium text-foreground hover:text-blue-400 transition-colors"
-                          >
-                            {m.firstName} {m.lastName}
-                          </Link>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 text-sm text-foreground-muted">
-                          <Mail className="h-3.5 w-3.5 shrink-0 text-foreground-muted/50" strokeWidth={1.5} />
-                          <span className="font-mono text-xs">{m.email}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${c.bg} ${c.text}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
-                          {TIER_SHORT[m.tier] ?? m.tier}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-foreground-muted">
-                        {m.jobTitle || TIER_LABELS[m.tier as keyof typeof TIER_LABELS] || "—"}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-foreground-muted">
-                        {m.employeeId ? `#${m.employeeId}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <KpiBadge value={kpiAssignedByUser.get(m.id)} color="blue" />
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <KpiBadge value={kpiActualsByUser.get(m.id)} color="amber" />
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <KpiBadge value={kpiApprovedByUser.get(m.id)} color="green" />
-                      </td>
-                    </tr>
-                  )
-                })}
+                {tierBreakdown.map(({ tier, count, assigned, actuals, approved }) => (
+                  <tr key={tier}>
+                    <th scope="row" className="nowrap" style={{ fontWeight: 550 }}>
+                      {TIER_SHORT[tier] ?? tier}
+                    </th>
+                    <td className="num">{count}</td>
+                    <td className="num">{assigned}</td>
+                    <td className="num">{actuals}</td>
+                    <td className="num">{approved}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Member directory */}
+      <section className="card list-card">
+        <div className="card-head">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="card-title">Member directory</h2>
+            <TagPill>{staff.length}</TagPill>
+          </div>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setDirExpanded(e => !e)}
+            aria-expanded={dirExpanded}
+            aria-controls="member-directory"
+            aria-label={dirExpanded ? "Hide member directory" : "Show member directory"}
+            title={dirExpanded ? "Hide member directory" : "Show member directory"}
+          >
+            {dirExpanded
+              ? <ChevronUp size={17} aria-hidden="true" />
+              : <ChevronDown size={17} aria-hidden="true" />}
+          </button>
+        </div>
+
+        {dirExpanded && (
+          <div
+            id="member-directory"
+            className="table-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label="Member directory"
+          >
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col" className="num">#</th>
+                  <SortHead field="name" label="Name" />
+                  <SortHead field="email" label="Email" />
+                  <SortHead field="tier" label="Tier" />
+                  <th scope="col">Job title</th>
+                  <th scope="col">Employee ID</th>
+                  <th scope="col" className="num">Assigned KPIs</th>
+                  <th scope="col" className="num">KPI actuals</th>
+                  <th scope="col" className="num">Approved</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((m, i) => (
+                  <tr key={m.id} className="hover">
+                    <td className="num muted">{i + 1}</td>
+                    <td className="nowrap">
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl} />
+                        <Link href={`/manager/members/${m.id}`} style={{ fontWeight: 550 }}>
+                          {m.firstName} {m.lastName}
+                        </Link>
+                      </div>
+                    </td>
+                    <td className="muted clip">{m.email}</td>
+                    <td><TagPill>{TIER_SHORT[m.tier] ?? m.tier}</TagPill></td>
+                    <td className="muted clip">{jobTitleOf(m) || "—"}</td>
+                    <td className="muted nowrap">
+                      {m.employeeId ? <span className="kpi-code">#{m.employeeId}</span> : "—"}
+                    </td>
+                    <CountCell value={kpiAssignedByUser.get(m.id)} />
+                    <CountCell value={kpiActualsByUser.get(m.id)} />
+                    <CountCell value={kpiApprovedByUser.get(m.id)} />
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
-      </div>
-    </div>
+      </section>
+    </>
   )
 }
 
@@ -373,7 +320,7 @@ function TeamAnalyticsSection({
 
 export default function TeamMembersPage() {
   const { data: session } = useSession()
-  const router = useRouter()
+  const toast = useToast()
   const isAdmin = session?.user?.role === "ADMIN"
   const [search, setSearch] = useState("")
   const { exportReport, isExporting } = useTeamReportPdf()
@@ -443,106 +390,137 @@ export default function TeamMembersPage() {
   }
 
   const roots = buildTree(allUsers)
+  const visibleRoots = roots.filter(nodeMatchesSearch)
   const teamCount = teamMembers.length
+  const visibleUnassigned = unassigned.filter(m => matchesSearch(m, search))
+
+  const subFacts = [
+    isAdmin ? plural(staffCount, "member") : `${plural(teamCount, "member")} in your hierarchy`,
+    activePeriod?.name,
+  ].filter(Boolean).join(" · ")
+
+  const handleExport = async () => {
+    if (isExporting) return
+    try {
+      await exportReport({
+        analyticsMembers: teamMembers,
+        orgChartMembers: allUsers,
+        managerName,
+        isAdmin,
+      })
+    } catch {
+      toast("Could not export the PDF. Try again", { icon: "alert" })
+    }
+  }
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title={isAdmin ? "Team Directory" : "My Team"}
-        description={isAdmin ? `${staffCount} members` : `${teamCount} member${teamCount !== 1 ? "s" : ""} in your hierarchy`}
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => exportReport({
-                analyticsMembers: teamMembers,
-                orgChartMembers: allUsers,
-                managerName,
-                isAdmin,
-              })}
-              disabled={isExporting || allUsers.length === 0}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-40"
-            >
-              <Download className="h-4 w-4" />
-              {isExporting ? "Generating…" : "Export PDF"}
-            </button>
+    <>
+      <PageHead
+        title={isAdmin ? "Team directory" : "My team"}
+        sub={subFacts}
+        actions={
+          <>
             {isAdmin && (
-              <Link
-                href="/admin/org-chart"
-                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground-muted transition-colors hover:bg-card-hover hover:text-foreground"
-              >
-                <Network className="h-4 w-4" />
-                Edit Org Chart
+              <Link href="/admin/org-chart" className="btn">
+                <Network size={16} strokeWidth={1.7} aria-hidden="true" />
+                Edit org chart
               </Link>
             )}
-          </div>
+            <button
+              type="button"
+              className="btn"
+              onClick={handleExport}
+              disabled={allUsers.length === 0}
+              title={allUsers.length === 0 ? "Nobody to export yet" : undefined}
+              aria-disabled={isExporting ? "true" : undefined}
+            >
+              <Download size={16} strokeWidth={1.7} aria-hidden="true" />
+              {isExporting ? "Generating…" : "Export PDF"}
+            </button>
+          </>
         }
       />
 
-      {/* Search (excluded from PDF) */}
-      <SearchBar value={search} onChange={setSearch} />
+      {/* Analytics section */}
+      {allUsers.length > 0 && (
+        <TeamAnalyticsSection
+          members={teamMembers}
+          isAdmin={isAdmin}
+          managerName={managerName}
+          kpiAssignedByUser={kpiAssignedByUser}
+          kpiActualsByUser={kpiActualsByUser}
+          kpiApprovedByUser={kpiApprovedByUser}
+        />
+      )}
 
-      <div className="space-y-6">
+      {/* Reporting structure */}
+      <h2 className="section-head">Reporting structure</h2>
 
-        {/* Analytics section */}
-        {allUsers.length > 0 && (
-          <TeamAnalyticsSection
-            members={teamMembers}
-            isAdmin={isAdmin}
-            managerName={managerName}
-            kpiAssignedByUser={kpiAssignedByUser}
-            kpiActualsByUser={kpiActualsByUser}
-            kpiApprovedByUser={kpiApprovedByUser}
+      {/* Search filters the tree and the unassigned list below it */}
+      <div className="toolbar">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name, email, title or ID"
+          aria-label="Search the reporting structure"
+        />
+      </div>
+
+      <section className="card list-card">
+        {roots.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No reporting lines yet"
+            description={
+              isAdmin
+                ? "Set who reports to whom in the org chart."
+                : "Nobody reports to you in the hierarchy yet."
+            }
+            action={
+              isAdmin ? (
+                <Link href="/admin/org-chart" className="btn">Open org chart</Link>
+              ) : undefined
+            }
           />
-        )}
-
-        {/* Org chart tree */}
-        <div className="overflow-x-auto rounded-xl border border-card-border bg-card-bg p-8">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Network className="h-4 w-4 text-foreground-muted" strokeWidth={1.5} />
-            Reporting Structure
+        ) : visibleRoots.length === 0 ? (
+          <EmptyState
+            title="No matches"
+            description="Nobody in the reporting structure matches that search."
+          />
+        ) : (
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Reporting structure">
+            <div className="org-tree">
+              <ul>
+                {visibleRoots.map(root => (
+                  <TreeNodeView key={root.member.id} node={root} searchLower={searchLower} />
+                ))}
+              </ul>
+            </div>
           </div>
-          {roots.length === 0 ? (
-            <div className="py-12 text-center text-foreground-muted">
-              <UserCircle className="mx-auto mb-3 h-10 w-10 text-foreground-muted/30" />
-              {isAdmin ? (
-                <>
-                  No team structure found. Build it in the{" "}
-                  <Link href="/admin/org-chart" className="text-blue-400 hover:underline">Org Chart</Link>.
-                </>
-              ) : (
-                "No team members found under your hierarchy."
-              )}
+        )}
+      </section>
+
+      {/* Unassigned — admin only */}
+      {unassigned.length > 0 && (
+        <>
+          <div className="section-head flex items-center gap-2">
+            <h2>Unassigned</h2>
+            <TagPill>{visibleUnassigned.length}</TagPill>
+          </div>
+          {visibleUnassigned.length === 0 ? (
+            <div className="card-list">
+              <EmptyState title="No matches" description="Nobody unassigned matches that search." />
             </div>
           ) : (
-            <div className="flex min-w-max items-start justify-center gap-8">
-              {roots.filter(nodeMatchesSearch).map(root => (
-                <TreeNodeView
-                  key={root.member.id}
-                  node={root}
-                  searchLower={searchLower}
-                  onClickMember={(id) => router.push(`/manager/members/${id}`)}
-                />
+            <div className="client-grid">
+              {visibleUnassigned.map(m => (
+                <MemberCard key={m.id} member={m} />
               ))}
             </div>
           )}
-        </div>
-
-        {/* Unassigned — admin only */}
-        {unassigned.length > 0 && (
-          <div className="rounded-xl border border-card-border bg-card-bg p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground-secondary">
-              <UserCircle className="h-4 w-4 text-amber-400" />
-              <span>Unassigned ({unassigned.filter(m => matchesSearch(m, search)).length})</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {unassigned.filter(m => matchesSearch(m, search)).map(m => (
-                <MemberCard key={m.id} member={m} compact onClick={() => router.push(`/manager/members/${m.id}`)} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </>
   )
 }
 
@@ -553,97 +531,49 @@ export default function TeamMembersPage() {
 function TreeNodeView({
   node,
   searchLower,
-  onClickMember,
 }: {
   node: TreeNode
   searchLower: string
-  onClickMember: (id: string) => void
 }) {
-  const colors = tierColors[node.member.tier] ?? defaultColor
-  const isHighlighted = searchLower && matchesSearch(node.member, searchLower)
+  const m = node.member
+  const isHighlighted = searchLower && matchesSearch(m, searchLower)
   const visibleChildren = searchLower
     ? node.children.filter(c => nodeMatchesSearchDeep(c, searchLower))
     : node.children
 
   return (
-    <div className="flex flex-col items-center">
-      {/* Node card */}
-      <button
-        onClick={() => onClickMember(node.member.id)}
-        className={`group w-52 rounded-xl border bg-card-bg p-3 text-left shadow-sm transition-all hover:shadow-md hover:shadow-black/10 ${
-          isHighlighted
-            ? "border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/30"
-            : colors.border + " hover:border-opacity-60"
-        }`}
-      >
-        {/* Avatar + name */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${colors.avatar} text-xs font-bold text-white shadow-sm`}>
-            {node.member.firstName[0]}{node.member.lastName[0]}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground group-hover:text-blue-400 transition-colors">
-              {node.member.firstName} {node.member.lastName}
-            </p>
-            {!node.member.isActive && (
-              <span className="text-[10px] font-medium text-red-400">Inactive</span>
-            )}
-          </div>
-        </div>
-
-        {/* Tier badge */}
-        <div className="mt-2 flex items-center gap-1.5">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} ${colors.text}`}>
-            <span className={`h-1 w-1 rounded-full ${colors.dot}`} />
-            {TIER_SHORT[node.member.tier] ?? node.member.tier}
+    <li>
+      <Link href={`/manager/members/${m.id}`} className={`org-node${isHighlighted ? " match" : ""}`}>
+        <span className="org-node-head">
+          <UserAvatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl} />
+          <span className="org-node-text">
+            <span className="org-node-name">{m.firstName} {m.lastName}</span>
+            {m.jobTitle && <span className="org-node-sub">{m.jobTitle}</span>}
           </span>
+        </span>
+
+        <span className="org-node-tags">
+          <TagPill>{TIER_SHORT[m.tier] ?? m.tier}</TagPill>
           {node.children.length > 0 && (
-            <span className="rounded-full bg-background-secondary px-2 py-0.5 text-[10px] font-medium text-foreground-muted">
-              {node.children.length} report{node.children.length !== 1 ? "s" : ""}
-            </span>
+            <span className="org-node-count">{plural(node.children.length, "report")}</span>
           )}
-        </div>
+          {!m.isActive && <StatusChip tone="bad" small>Inactive</StatusChip>}
+        </span>
 
-        {/* Job title */}
-        {node.member.jobTitle && (
-          <p className="mt-1.5 truncate text-[11px] text-foreground-muted">{node.member.jobTitle}</p>
-        )}
+        <span className="org-node-meta">
+          <Mail size={13} strokeWidth={1.6} aria-hidden="true" />
+          <span>{m.email}</span>
+        </span>
+      </Link>
 
-        {/* Email */}
-        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-foreground-muted/70">
-          <Mail className="h-3 w-3 shrink-0" strokeWidth={1.5} />
-          <span className="truncate">{node.member.email}</span>
-        </div>
-      </button>
-
-      {/* Children */}
       {visibleChildren.length > 0 && (
-        <div className="flex flex-col items-center">
-          {/* Line down from card */}
-          <div className="h-6 w-px bg-border" />
-
-          {/* Horizontal connector row */}
-          <div className="relative flex items-start gap-6">
-            {visibleChildren.length > 1 && (
-              <div
-                className="absolute top-0 h-px bg-border"
-                style={{ left: "calc(104px)", right: "calc(104px)" }}
-              />
-            )}
-            {visibleChildren.map(child => (
-              <div key={child.member.id} className="flex flex-col items-center">
-                <div className="h-6 w-px bg-border" />
-                <TreeNodeView
-                  node={child}
-                  searchLower={searchLower}
-                  onClickMember={onClickMember}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        <ul>
+          {visibleChildren.map(child => (
+            <TreeNodeView key={child.member.id} node={child} searchLower={searchLower} />
+          ))}
+        </ul>
       )}
-    </div>
+    </li>
   )
 }
 
@@ -668,45 +598,19 @@ function nodeMatchesSearchDeep(node: TreeNode, q: string): boolean {
   return node.children.some(c => nodeMatchesSearchDeep(c, q))
 }
 
-function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function MemberCard({ member }: { member: Member }) {
   return (
-    <div className="relative">
-      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-muted" strokeWidth={1.5} />
-      <input
-        type="text"
-        placeholder="Search by name, email, title, or ID..."
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full rounded-lg border border-border bg-card-bg py-2.5 pl-10 pr-4 text-sm text-foreground placeholder-foreground-muted outline-none transition-colors focus:border-blue-500"
-      />
-    </div>
-  )
-}
-
-function MemberCard({ member, compact, onClick }: { member: Member; compact?: boolean; onClick: () => void }) {
-  const colors = tierColors[member.tier] ?? defaultColor
-  return (
-    <div
-      onClick={onClick}
-      className={`group cursor-pointer rounded-xl border bg-card-bg transition-all hover:shadow-md hover:shadow-black/10 ${colors.border} ${compact ? "p-3" : "p-4"}`}
-    >
-      <div className="flex items-center gap-3">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${colors.avatar} text-xs font-bold text-white`}>
-          {member.firstName[0]}{member.lastName[0]}
-        </div>
+    <Link href={`/manager/members/${member.id}`} className="card client-card">
+      <div className="client-card-head">
+        <UserAvatar firstName={member.firstName} lastName={member.lastName} avatarUrl={member.avatarUrl} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground group-hover:text-blue-400 transition-colors">
-            {member.firstName} {member.lastName}
-          </p>
-          <p className="truncate text-xs text-foreground-muted">{member.jobTitle || TIER_LABELS[member.tier as keyof typeof TIER_LABELS]}</p>
+          <div className="client-name">{member.firstName} {member.lastName}</div>
+          <div className="client-sub">{jobTitleOf(member)}</div>
         </div>
       </div>
-      <div className="mt-2 flex items-center gap-1.5">
-        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} ${colors.text}`}>
-          <span className={`h-1 w-1 rounded-full ${colors.dot}`} />
-          {TIER_SHORT[member.tier] ?? member.tier}
-        </span>
+      <div className="org-node-tags">
+        <TagPill>{TIER_SHORT[member.tier] ?? member.tier}</TagPill>
       </div>
-    </div>
+    </Link>
   )
 }

@@ -1,22 +1,54 @@
 "use client"
 
+import { useState, type KeyboardEvent } from "react"
 import { useTeamMembers } from "@/hooks/useTeam"
 import { useActivePeriod } from "@/hooks/usePeriods"
-import { PageHeader } from "@/components/shared/PageHeader"
+import { PageHead } from "@/components/ui/PageHead"
+import { ChipRow } from "@/components/ui/Segmented"
+import { BandChip, TagPill } from "@/components/ui/StatusChip"
+import { PillarTag } from "@/components/ui/KpiMarks"
+import { UserAvatar } from "@/components/layout/UserMenu"
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner"
-import { TIER_LABELS, PILLARS, APPRAISAL_BANDS } from "@/lib/constants"
+import { EmptyState } from "@/components/shared/EmptyState"
+import { TIER_LABELS, TIER_SHORT, PILLARS, APPRAISAL_BANDS } from "@/lib/constants"
 import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
+import { Users } from "lucide-react"
+import type { AppraisalBand } from "@prisma/client"
 import type { PillarCode } from "@/types"
+import "@/styles/views/manager-team.css"
 
-function getPillarCellStyle(percent: number): { bg: string; text: string } {
-  if (percent >= 90) return { bg: "rgba(34,197,94,0.15)",  text: "#22c55e" }
-  if (percent >= 80) return { bg: "rgba(132,204,22,0.15)", text: "#84cc16" }
-  if (percent >= 70) return { bg: "rgba(245,158,11,0.15)", text: "#f59e0b" }
-  if (percent >= 60) return { bg: "rgba(249,115,22,0.15)", text: "#f97316" }
-  if (percent >= 40) return { bg: "rgba(239,68,68,0.15)",  text: "#ef4444" }
-  return                      { bg: "rgba(153,27,27,0.20)", text: "#fca5a5" }
+interface ScoreSnap {
+  pillarCode: string
+  pillarScore: number
+  pillarPercent: number
+  overallScore: number | null
+  appraisalBand: AppraisalBand | null
+}
+
+// Short column heads; the full pillar name is the header's title.
+const PILLAR_SHORT: Record<PillarCode, string> = {
+  A: "Delivery",
+  B: "Data quality",
+  C: "Forecasting",
+  D: "Communication",
+  E: "Attendance",
+  F: "Growth",
+}
+
+// The cell tint follows the appraisal band the % falls in, so it agrees with
+// the Band column. The written figure is always the signal.
+function heatClass(percent: number): string {
+  if (percent >= APPRAISAL_BANDS.EXCEEDS.min) return "heat-ok"
+  if (percent >= APPRAISAL_BANDS.STRONG.min) return "heat-info"
+  if (percent >= APPRAISAL_BANDS.MEETS.min) return "heat-meets"
+  if (percent >= APPRAISAL_BANDS.NEEDS_IMPROVEMENT.min) return "heat-warn"
+  return "heat-bad"
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`
 }
 
 export default function TeamOverviewPage() {
@@ -24,6 +56,7 @@ export default function TeamOverviewPage() {
   const { data: session } = useSession()
   const { data: allMembers, isLoading: membersLoading } = useTeamMembers()
   const { data: activePeriod } = useActivePeriod()
+  const [tierFilter, setTierFilter] = useState("")
 
   // Exclude the current manager/admin from the list — they are the viewer, not a report
   const members = (allMembers ?? []).filter(
@@ -37,9 +70,9 @@ export default function TeamOverviewPage() {
       const results = await Promise.all(
         members.map(async (m) => {
           const res = await fetch(`/api/kpis/scoring?userId=${m.id}&evalPeriodId=${activePeriod.id}`)
-          if (!res.ok) return { userId: m.id, scores: [] }
+          if (!res.ok) return { userId: m.id, scores: [] as ScoreSnap[] }
           const json = await res.json()
-          return { userId: m.id, scores: json.data || [] }
+          return { userId: m.id, scores: (json.data || []) as ScoreSnap[] }
         })
       )
       return results
@@ -50,114 +83,149 @@ export default function TeamOverviewPage() {
   if (membersLoading) return <LoadingSpinner />
 
   const pillars: PillarCode[] = ["A", "B", "C", "D", "E", "F"]
+  const tiers = Array.from(new Set(members.map((m) => m.tier)))
+  const shown = tierFilter ? members.filter((m) => m.tier === tierFilter) : members
+  const scoredCount = (allScores ?? []).filter((s) => s.scores.some((x) => x.pillarCode === "OVERALL")).length
+
+  const open = (id: string) => router.push(`/manager/members/${id}`)
+  const onRowKey = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      open(id)
+    }
+  }
+
+  const sub = [
+    plural(members.length, "active member"),
+    activePeriod?.name || "No active period",
+    ...(members.length > 0 && activePeriod ? [`${scoredCount} scored`] : []),
+  ].join(" · ")
 
   return (
-    <div>
-      <PageHeader
-        title="Team Overview"
-        description={`${members.length} active member${members.length !== 1 ? "s" : ""} — ${activePeriod?.name || "No active period"}`}
-      />
+    <>
+      <PageHead title="Team overview" sub={sub} />
 
       {members.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-card-border bg-card-bg py-16 text-center">
-          <p className="text-sm text-foreground-muted">No team members found.</p>
+        <div className="card-list">
+          <EmptyState
+            icon={Users}
+            title="No team members yet"
+            description="People who report to you appear here once an admin links them to you."
+          />
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-card-border bg-card-bg">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-background-secondary">
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Member</th>
-                <th className="px-4 py-3 font-medium text-foreground-secondary">Tier</th>
-                {pillars.map((p) => (
-                  <th
-                    key={p}
-                    className="px-3 py-3 text-center font-medium"
-                    style={{ color: PILLARS[p].color }}
-                  >
-                    {p}
-                  </th>
-                ))}
-                <th className="px-4 py-3 text-center font-medium text-foreground-secondary">Overall</th>
-                <th className="px-4 py-3 text-center font-medium text-foreground-secondary">Band</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => {
-                const userScores = allScores?.find((s) => s.userId === member.id)?.scores || []
-                const overall = userScores.find((s: { pillarCode: string }) => s.pillarCode === "OVERALL")
+        <>
+          {tiers.length > 1 && (
+            <ChipRow
+              label="Tier"
+              value={tierFilter}
+              onChange={setTierFilter}
+              options={[
+                { value: "", label: "All tiers" },
+                ...tiers.map((t) => ({ value: t, label: TIER_SHORT[t] ?? t })),
+              ]}
+            />
+          )}
 
-                return (
-                  <tr
-                    key={member.id}
-                    onClick={() => router.push(`/manager/members/${member.id}`)}
-                    className="cursor-pointer border-b border-border transition-colors hover:bg-card-hover"
-                  >
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {member.firstName} {member.lastName}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-foreground-secondary">
-                      {TIER_LABELS[member.tier as keyof typeof TIER_LABELS]}
-                    </td>
-                    {pillars.map((p) => {
-                      const snap = userScores.find((s: { pillarCode: string }) => s.pillarCode === p)
-                      if (!snap) {
-                        return (
-                          <td key={p} className="px-3 py-3 text-center text-foreground-muted">—</td>
-                        )
-                      }
-                      const { bg, text } = getPillarCellStyle(snap.pillarPercent)
-                      return (
-                        <td key={p} className="px-2 py-2 text-center">
-                          <div
-                            className="inline-flex flex-col items-center rounded-lg px-2.5 py-1.5"
-                            style={{ backgroundColor: bg }}
-                          >
-                            <span className="font-mono text-sm font-bold leading-tight" style={{ color: text }}>
-                              {Math.round(snap.pillarPercent)}%
-                            </span>
-                            <span className="font-mono text-xs leading-tight" style={{ color: text, opacity: 0.75 }}>
-                              {(snap.pillarScore as number).toFixed(1)}/5
-                            </span>
-                          </div>
-                        </td>
-                      )
-                    })}
-                    <td className="px-2 py-2 text-center">
-                      {overall ? (() => {
-                        const { bg, text } = getPillarCellStyle(overall.overallScore)
-                        return (
-                          <div
-                            className="inline-flex items-center rounded-lg px-3 py-1.5"
-                            style={{ backgroundColor: bg }}
-                          >
-                            <span className="font-mono text-sm font-bold" style={{ color: text }}>
-                              {Math.round(overall.overallScore)}%
-                            </span>
-                          </div>
-                        )
-                      })() : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {overall?.appraisalBand ? (() => {
-                        const bandInfo = APPRAISAL_BANDS[overall.appraisalBand as keyof typeof APPRAISAL_BANDS]
-                        return (
-                          <span
-                            className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
-                            style={{ backgroundColor: bandInfo.color + "20", color: bandInfo.color }}
-                          >
-                            {bandInfo.label}
-                          </span>
-                        )
-                      })() : "—"}
-                    </td>
+          <section className="card list-card" aria-labelledby="team-heatmap-title">
+            <div className="card-head">
+              <h2 className="card-title" id="team-heatmap-title">Pillar scores</h2>
+              <span className="side-note">Select a member to open their scorecard</span>
+            </div>
+
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Team pillar scores">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Member</th>
+                    {pillars.map((p) => (
+                      <th key={p} scope="col" className="num" title={PILLARS[p].name}>
+                        <span className="team-pillar-head">
+                          <PillarTag code={p} />
+                          {PILLAR_SHORT[p]}
+                        </span>
+                      </th>
+                    ))}
+                    <th scope="col" className="num">Overall</th>
+                    <th scope="col">Band</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {shown.map((member) => {
+                    const userScores = allScores?.find((s) => s.userId === member.id)?.scores || []
+                    const overall = userScores.find((s) => s.pillarCode === "OVERALL")
+                    const name = `${member.firstName} ${member.lastName}`
+
+                    return (
+                      <tr
+                        key={member.id}
+                        className="clickable"
+                        tabIndex={0}
+                        title={`Open ${name}'s scorecard`}
+                        onClick={() => open(member.id)}
+                        onKeyDown={(e) => onRowKey(e, member.id)}
+                      >
+                        <th scope="row" style={{ fontWeight: "inherit" }}>
+                          <span className="team-person">
+                            <UserAvatar
+                              firstName={member.firstName}
+                              lastName={member.lastName}
+                              avatarUrl={member.avatarUrl}
+                            />
+                            <span>{name}</span>
+                            <span title={TIER_LABELS[member.tier as keyof typeof TIER_LABELS]}>
+                              <TagPill>{TIER_SHORT[member.tier] ?? member.tier}</TagPill>
+                            </span>
+                          </span>
+                        </th>
+                        {pillars.map((p) => {
+                          const snap = userScores.find((s) => s.pillarCode === p)
+                          if (!snap) {
+                            return (
+                              <td key={p} className="num muted">
+                                —<span className="sr-only">Not scored</span>
+                              </td>
+                            )
+                          }
+                          return (
+                            <td key={p} className={`num heat ${heatClass(snap.pillarPercent)}`}>
+                              <span className="heat-pct">{Math.round(snap.pillarPercent)}%</span>
+                              <span className="heat-sub">{snap.pillarScore.toFixed(1)}/5</span>
+                            </td>
+                          )
+                        })}
+                        {overall && overall.overallScore !== null ? (
+                          <td className={`num heat ${heatClass(overall.overallScore)}`}>
+                            <span className="heat-pct">{Math.round(overall.overallScore)}%</span>
+                          </td>
+                        ) : (
+                          <td className="num muted">—</td>
+                        )}
+                        <td>
+                          {overall?.appraisalBand ? (
+                            <BandChip band={overall.appraisalBand} small />
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="list-foot">
+              <span>
+                {shown.length === members.length
+                  ? plural(members.length, "member")
+                  : `${shown.length} of ${plural(members.length, "member")} shown`}
+              </span>
+              <span>Shading follows the appraisal band of each figure</span>
+            </div>
+          </section>
+        </>
       )}
-    </div>
+    </>
   )
 }

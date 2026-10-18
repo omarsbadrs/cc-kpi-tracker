@@ -20,16 +20,16 @@ export function useExportOrgChartPdf() {
       const el = document.getElementById(elementId)
       if (!el) throw new Error(`Element #${elementId} not found`)
 
-      // Detect theme — use solid bg so semi-transparent cards render correctly
-      const isDark = document.documentElement.classList.contains("dark")
-      const bgColor = isDark ? "#121214" : "#f5f6f8"
-      // Card bg color resolved (rgba(255,255,255,0.06) on #121214 ≈ #1b1b1e)
-      const cardBg = isDark ? "#1e1e22" : "#ffffff"
-      // Visible connector line / border color
-      const lineColor = isDark ? "#4a4a5e" : "#94a3b8"
-      const borderColor = isDark ? "#3a3a4e" : "#cbd5e1"
-      const textPrimary = isDark ? "#e8eaf0" : "#111827"
-      const textMuted = isDark ? "#8b8fa8" : "#6b7280"
+      // The design-system tokens for whichever theme is on screen, resolved
+      // to solid colours (html2canvas can't follow var()).
+      const root = getComputedStyle(document.documentElement)
+      const token = (name: string, fallback: string) => root.getPropertyValue(name).trim() || fallback
+      const bgColor = token("--page", "#f4f4f6")
+      const cardBg = token("--surface", "#ffffff")
+      const lineColor = token("--hairline-strong", "#d8d8e0")
+      const borderColor = token("--hairline", "#e6e6eb")
+      const textPrimary = token("--ink", "#131417")
+      const textMuted = token("--ink-3", "#6c6e77")
 
       const canvas = await html2canvas(el, {
         scale: 2,

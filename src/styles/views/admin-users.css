@@ -1,0 +1,152 @@
+/* Admin users: the audit log rows (user list page and the user detail side).
+
+   Same skeleton as a document row: a 30px ruled icon tile, a title over a
+   quiet sub, rows divided by a top rule. Changed values are monospace, the
+   old one struck through, so a change never relies on red/green alone. */
+
+@layer components {
+  .audit-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .audit-row {
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+    padding: 11px 14px;
+  }
+
+  .audit-row + .audit-row {
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* Inside a padded side card the rows run edge to edge of its content. */
+  .side-card .audit-row {
+    padding-inline: 0;
+  }
+
+  .audit-ic {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--r-sm);
+    background: var(--band);
+    border: 1px solid var(--hairline);
+    color: var(--ink-3);
+  }
+
+  .audit-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .audit-title {
+    font-size: 14px;
+    font-weight: 550;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .audit-target {
+    font-weight: 450;
+    color: var(--ink-2);
+  }
+
+  .audit-sub {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  .audit-changes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+  }
+
+  .audit-change {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+
+  .audit-field {
+    flex: none;
+  }
+
+  /* The values give way (ellipsis) before the field name does. */
+  .audit-vals {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  .audit-vals del {
+    color: var(--ink-3);
+  }
+
+  .audit-vals .audit-arrow {
+    margin-inline: 4px;
+    color: var(--ink-3);
+  }
+
+  /* The person cell of the users table: avatar, then name over email. */
+  .person-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    max-width: 34ch;
+  }
+
+  .person-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .person-name {
+    font-weight: 550;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .person-sub {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Toolbar selects keep a readable width and wrap below search on phones. */
+  .toolbar.wrap {
+    flex-wrap: wrap;
+  }
+
+  .toolbar.wrap .search-wrap {
+    flex-basis: 240px;
+  }
+
+  .toolbar-select {
+    flex: 0 1 160px;
+    min-width: 120px;
+  }
+}

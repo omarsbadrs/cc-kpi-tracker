@@ -2,29 +2,19 @@ interface StatCardProps {
   label: string
   value: string | number
   subtitle?: string
+  /** Kept for old call sites; the value is always ink. */
   color?: string
   icon?: React.ReactNode
 }
 
-export function StatCard({ label, value, subtitle, color, icon }: StatCardProps) {
+/** A single figure on its own card. Inside a row of figures, use StatGrid. */
+export function StatCard({ label, value, subtitle }: StatCardProps) {
   return (
-    <div className="glass-card p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="label-xs">{label}</p>
-          <p
-            className="mt-2 metric-lg"
-            style={color ? { color } : undefined}
-          >
-            {value}
-          </p>
-          {subtitle && (
-            <p className="mt-1 text-xs text-foreground-muted">{subtitle}</p>
-          )}
-        </div>
-        {icon && (
-          <div className="text-2xl text-foreground-muted">{icon}</div>
-        )}
+    <div className="card">
+      <div className="kv">
+        <span className="stat-label">{label}</span>
+        <span className="stat-value">{value}</span>
+        {subtitle && <span className="stat-sub">{subtitle}</span>}
       </div>
     </div>
   )

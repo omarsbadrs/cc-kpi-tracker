@@ -1,0 +1,67 @@
+/* Manager team overview: the members × pillars heatmap. Tokens only. */
+
+@layer components {
+  /* A heat cell is ink text on a light tint of the appraisal band its %
+     falls in. The figure is always written, and the Band column says the
+     same in words, so the tint only repeats what the numbers say. Each tint
+     has a plain --band fallback first for Safari before 16.2. */
+  .data-table td.heat {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .heat-pct {
+    display: block;
+    font-weight: 600;
+  }
+
+  .heat-sub {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+
+  .data-table td.heat-ok {
+    background: var(--band);
+    background: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  }
+
+  .data-table td.heat-info {
+    background: var(--band);
+    background: color-mix(in srgb, var(--info) 12%, var(--surface));
+  }
+
+  .data-table td.heat-meets {
+    background: var(--band);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+
+  .data-table td.heat-warn {
+    background: var(--band);
+    background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  }
+
+  .data-table td.heat-bad {
+    background: var(--band);
+    background: color-mix(in srgb, var(--bad) 14%, var(--surface));
+  }
+
+  /* Member column: avatar, name, tier pill. */
+  .team-person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-weight: 550;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .team-pillar-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}

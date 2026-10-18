@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { SessionProvider } from "next-auth/react"
 import { useState, useEffect, useCallback, useMemo, createContext, useContext, type ReactNode } from "react"
+import { applyTheme, readThemeMode, resolveTheme, type ResolvedTheme, type ThemeMode } from "@/lib/theme"
+import { ToastProvider } from "@/components/ui/Toast"
 
 // ─────────────────────────────────────
 // Query Provider
@@ -33,13 +35,20 @@ function getQueryClient() {
 // Theme Provider
 // ─────────────────────────────────────
 
-type Theme = "dark" | "light"
-
-const ThemeContext = createContext<{
-  theme: Theme
+interface ThemeContextValue {
+  /** The user's choice. */
+  mode: ThemeMode
+  /** What is on screen now ("system" resolved). */
+  theme: ResolvedTheme
+  setMode: (mode: ThemeMode) => void
+  /** Flips between light and dark, leaving "system". */
   toggleTheme: () => void
-}>({
-  theme: "dark",
+}
+
+const ThemeContext = createContext<ThemeContextValue>({
+  mode: "system",
+  theme: "light",
+  setMode: () => {},
   toggleTheme: () => {},
 })
 
@@ -48,38 +57,37 @@ export function useTheme() {
 }
 
 function ThemeProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ theme: Theme; mounted: boolean }>({
-    theme: "dark",
-    mounted: false,
-  })
+  // The boot script in <head> already stamped data-theme; this only mirrors it.
+  const [mode, setModeState] = useState<ThemeMode>("system")
+  const [theme, setTheme] = useState<ResolvedTheme>("light")
 
   useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null
-    const initial = stored || "dark"
-    document.documentElement.classList.toggle("dark", initial === "dark")
-    setState({ theme: initial, mounted: true })
+    const initial = readThemeMode()
+    setModeState(initial)
+    setTheme(resolveTheme(initial))
+  }, [])
+
+  // While following the system, follow it live.
+  useEffect(() => {
+    if (mode !== "system") return
+    const mq = window.matchMedia("(prefers-color-scheme: dark)")
+    const onChange = () => setTheme(applyTheme("system"))
+    mq.addEventListener("change", onChange)
+    return () => mq.removeEventListener("change", onChange)
+  }, [mode])
+
+  const setMode = useCallback((next: ThemeMode) => {
+    setModeState(next)
+    setTheme(applyTheme(next))
   }, [])
 
   const toggleTheme = useCallback(() => {
-    setState((prev) => {
-      const next = prev.theme === "dark" ? "light" : "dark"
-      localStorage.setItem("theme", next)
-      document.documentElement.classList.toggle("dark", next === "dark")
-      return { ...prev, theme: next }
-    })
-  }, [])
+    setMode(theme === "dark" ? "light" : "dark")
+  }, [theme, setMode])
 
-  const contextValue = useMemo(() => ({ theme: state.theme, toggleTheme }), [state.theme, toggleTheme])
+  const value = useMemo(() => ({ mode, theme, setMode, toggleTheme }), [mode, theme, setMode, toggleTheme])
 
-  if (!state.mounted) {
-    return <div className="dark">{children}</div>
-  }
-
-  return (
-    <ThemeContext.Provider value={contextValue}>
-      {children}
-    </ThemeContext.Provider>
-  )
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
 
 // ─────────────────────────────────────
@@ -92,7 +100,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </SessionProvider>
   )
